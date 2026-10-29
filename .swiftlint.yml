@@ -1,0 +1,48 @@
+included:
+  - Sources
+  - Tests
+  - App
+excluded:
+  - .build
+
+opt_in_rules:
+  - closure_spacing
+  - contains_over_first_not_nil
+  - empty_count
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - last_where
+  - modifier_order
+  - multiline_parameters
+  - operator_usage_whitespace
+  - private_over_fileprivate
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unused_declaration
+  - unused_import
+  - vertical_whitespace_closing_braces
+
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+
+identifier_name:
+  excluded: [id, x, y, i, ok]
+
+type_body_length:
+  warning: 300
+
+file_length:
+  warning: 500
+
+function_body_length:
+  warning: 60
