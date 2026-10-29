@@ -22,8 +22,6 @@ opt_in_rules:
   - redundant_nil_coalescing
   - sorted_first_last
   - toggle_bool
-  - unused_declaration
-  - unused_import
   - vertical_whitespace_closing_braces
 
 analyzer_rules:
@@ -36,7 +34,7 @@ line_length:
   ignores_comments: true
 
 identifier_name:
-  excluded: [id, x, y, i, ok]
+  excluded: [id, x, y, i, ok, pq]
 
 type_body_length:
   warning: 300
