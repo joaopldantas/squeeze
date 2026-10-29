@@ -107,6 +107,13 @@ struct EncodingPlannerTests {
         #expect(Double(screen) == (Double(normal) * 0.55).rounded(.down))
     }
 
+    @Test("só o tamanho alvo trata o bitrate como teto")
+    func bitrateCeiling() throws {
+        #expect(try video(.targetSize(megabytes: 20)).isBitrateCeiling)
+        #expect(try !video(.balanced).isBitrateCeiling)
+        #expect(try !video(.targetSize(megabytes: 20), overrides: .init(videoBitrate: 3_000_000)).isBitrateCeiling)
+    }
+
     @Test("tamanho alvo ignora o movimento: o tamanho prometido manda")
     func targetSizeIgnoresMotion() throws {
         let normal = try video(.targetSize(megabytes: 20), motion: .normal).bitrate

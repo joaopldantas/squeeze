@@ -9,6 +9,8 @@ public struct VideoEncodingSettings: Hashable, Sendable, Codable {
     public var bitrate: Int
     /// Dynamic range written to the output; `.sdr` means HDR sources are tone-mapped.
     public var dynamicRange: DynamicRange
+    /// Treat `bitrate` as a ceiling, not just an average. Used when the user asked for a file size.
+    public var isBitrateCeiling = false
 }
 
 public struct AACSettings: Hashable, Sendable, Codable {

@@ -55,8 +55,10 @@ public struct EncodingPlanner: Sendable {
         }
 
         let (dynamicRange, warnings) = Self.dynamicRange(for: codec, source: source.video)
+        let isTargetSize = if case .targetSize = preset { overrides.videoBitrate == nil } else { false }
         let video = VideoEncodingSettings(
-            codec: codec, size: size, frameRateLimit: frameRateLimit, bitrate: bitrate, dynamicRange: dynamicRange
+            codec: codec, size: size, frameRateLimit: frameRateLimit, bitrate: bitrate,
+            dynamicRange: dynamicRange, isBitrateCeiling: isTargetSize
         )
         return EncodingPlan(video: .encode(video), audio: audio, warnings: warnings)
     }
