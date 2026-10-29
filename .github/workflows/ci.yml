@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SwiftLint
+        run: |
+          command -v swiftlint >/dev/null || brew install swiftlint
+          swiftlint lint --strict --reporter github-actions-logging
+
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Build
+        run: swift build --build-tests
+      - name: Testes unitários
+        run: swift test --skip-build --filter SqueezeCoreTests
+      - name: Testes de integração
+        # CI VMs have no media engine; VideoToolbox falls back to its software encoders.
+        run: swift test --skip-build --filter SqueezeIntegrationTests
