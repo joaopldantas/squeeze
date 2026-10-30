@@ -3,18 +3,15 @@ import Observation
 import SqueezeUI
 import SwiftUI
 
-/// The menu bar icon: drop videos on it to compress them with the current preset; click it for the panel.
+/// The menu bar icon: shows progress while compressing; click it for the panel.
 ///
-/// `MenuBarExtra` can't receive drops, so this is an `NSStatusItem`. The status bar window is registered
-/// for file drags and forwards the dragging callbacks to its delegate (this controller).
+/// Status items can't receive drops on current macOS, so videos are dropped on the panel's drop zone
+/// or on the shelf that `DropShelfController` slides out under this icon during a drag.
 @MainActor
-final class StatusItemController: NSObject, NSWindowDelegate {
+final class StatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private let viewModel: CompressionViewModel
-    private var isDropTargeted = false {
-        didSet { updateIcon() }
-    }
 
     init(viewModel: CompressionViewModel, preferences: AppPreferences, openWindow: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -34,12 +31,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             button.target = self
             button.action = #selector(togglePopover)
             button.setAccessibilityLabel("Squeeze")
-            button.toolTip = "Squeeze: solte vídeos aqui para comprimir"
-            button.window?.registerForDraggedTypes([.fileURL])
-            button.window?.delegate = self
+            button.toolTip = "Squeeze: arraste vídeos até aqui para comprimir"
         }
         updateIcon()
         observeProgress()
+    }
+
+    /// The icon's frame on screen, so the drop shelf can open right under it.
+    var iconFrame: NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
     }
 
     @objc private func togglePopover() {
@@ -55,7 +56,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     // MARK: Icon
 
     private func updateIcon() {
-        statusItem.button?.image = StatusIcon.image(progress: viewModel.activeProgress, isDropTargeted: isDropTargeted)
+        statusItem.button?.image = StatusIcon.image(progress: viewModel.activeProgress)
     }
 
     /// Re-renders the icon whenever the overall progress changes. `withObservationTracking` fires once,
@@ -70,41 +71,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             }
         }
     }
-
-    // MARK: Dropping files
-
-    private func fileURLs(in info: any NSDraggingInfo) -> [URL] {
-        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
-        return info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL] ?? []
-    }
-
-    func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard CompressionViewModel.accepts(fileURLs(in: sender)) else { return [] }
-        isDropTargeted = true
-        return .copy
-    }
-
-    func draggingExited(_ sender: (any NSDraggingInfo)?) {
-        isDropTargeted = false
-    }
-
-    func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        isDropTargeted = false
-        let urls = fileURLs(in: sender)
-        guard CompressionViewModel.accepts(urls) else { return false }
-        viewModel.addAndConvert(urls)
-        return true
-    }
 }
 
 /// Template images for the status item, so they follow the menu bar's light/dark appearance.
 enum StatusIcon {
     private static let size = NSSize(width: 18, height: 18)
 
-    static func image(progress: Double?, isDropTargeted: Bool) -> NSImage? {
-        if isDropTargeted {
-            return symbol("arrow.down.circle.fill")
-        }
+    static func image(progress: Double?) -> NSImage? {
         guard let progress else {
             return symbol("arrow.down.right.and.arrow.up.left")
         }

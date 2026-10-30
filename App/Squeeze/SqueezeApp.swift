@@ -38,12 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let preferences = AppPreferences()
     var openMainWindow: @MainActor () -> Void = {}
     private var statusItem: StatusItemController?
+    private var dropShelf: DropShelfController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         preferences.applyActivationPolicy()
         statusItem = StatusItemController(viewModel: viewModel, preferences: preferences) { [weak self] in
             self?.showMainWindow()
         }
+        dropShelf = DropShelfController(viewModel: viewModel) { [weak self] in self?.statusItem?.iconFrame }
         UNUserNotificationCenter.current().delegate = self
         viewModel.onBatchStarted = { [weak self] in self?.requestNotificationPermission() }
         viewModel.onBatchFinished = { [weak self] report in self?.notify(report) }
