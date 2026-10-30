@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-@testable import SqueezeCLI
 @testable import SqueezeCore
 
 @Suite("Formatação da saída")
@@ -63,12 +62,5 @@ struct FormattingTests {
         )
         let expected = "HEVC · 1920×1080 · 4,0 Mbps · até 60 fps · HDR · áudio AAC 128 kbps"
         #expect(format.plan(encode, source: source) == expected)
-    }
-
-    @Test("sugestão de preset usa o nome da CLI")
-    func presetSpelling() {
-        #expect(PresetChoice(.smallest) == .smallest)
-        #expect(PresetChoice(.web(.p720)) == .web720)
-        #expect(PresetChoice(.targetSize(megabytes: 5)) == nil)
     }
 }

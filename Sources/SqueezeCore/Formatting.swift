@@ -1,12 +1,15 @@
 import Foundation
-import SqueezeCore
 
-/// Pure text formatting, so the output can be tested without running a conversion.
-struct Formatting {
-    var locale = Locale(identifier: "pt_BR")
+/// Pure pt-BR text formatting shared by the CLI and the app, testable without running a conversion.
+public struct Formatting: Sendable {
+    public var locale: Locale
+
+    public init(locale: Locale = Locale(identifier: "pt_BR")) {
+        self.locale = locale
+    }
 
     /// Decimal units, like Finder: "120,3 MB".
-    func bytes(_ count: Int64) -> String {
+    public func bytes(_ count: Int64) -> String {
         let units: [(String, Double)] = [("GB", 1e9), ("MB", 1e6), ("KB", 1e3)]
         let value = Double(count)
         for (unit, size) in units where value >= size {
@@ -16,7 +19,7 @@ struct Formatting {
     }
 
     /// "−82%" when smaller, "+15%" when the output grew; one decimal below 1% so "+0,4%" never reads "−0%".
-    func change(_ comparison: SizeComparison) -> String {
+    public func change(_ comparison: SizeComparison) -> String {
         guard comparison.savedBytes != 0 else { return "0%" }
         let magnitude = abs(comparison.savedFraction * 100)
         let digits = magnitude < 1 ? 1 : 0
@@ -24,14 +27,14 @@ struct Formatting {
         return (comparison.savedBytes > 0 ? "−" : "+") + text + "%"
     }
 
-    func bitrate(_ bitsPerSecond: Int) -> String {
+    public func bitrate(_ bitsPerSecond: Int) -> String {
         bitsPerSecond >= 1_000_000
             ? "\(number(Double(bitsPerSecond) / 1e6)) Mbps"
             : "\(bitsPerSecond / 1_000) kbps"
     }
 
     /// "0:42", "12:05", "1:02:03".
-    func duration(_ seconds: Double) -> String {
+    public func duration(_ seconds: Double) -> String {
         let total = Int(seconds.rounded())
         let (hours, minutes, secs) = (total / 3600, total % 3600 / 60, total % 60)
         return hours > 0
@@ -39,16 +42,16 @@ struct Formatting {
             : String(format: "%d:%02d", minutes, secs)
     }
 
-    func elapsed(_ duration: Duration) -> String {
+    public func elapsed(_ duration: Duration) -> String {
         let seconds = Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
         return "\(number(seconds)) s"
     }
 
-    func frameRate(_ fps: Double) -> String {
+    public func frameRate(_ fps: Double) -> String {
         fps.formatted(.number.precision(.fractionLength(0...2)).locale(locale)) + " fps"
     }
 
-    func plan(_ plan: EncodingPlan, source: MediaInfo) -> String {
+    public func plan(_ plan: EncodingPlan, source: MediaInfo) -> String {
         let video: String = switch plan.video {
         case .passthrough:
             "vídeo copiado sem reencodar (\(source.video.codec))"
@@ -69,7 +72,7 @@ struct Formatting {
         return "\(video) · \(audio)"
     }
 
-    func source(_ info: MediaInfo) -> String {
+    public func source(_ info: MediaInfo) -> String {
         [
             info.video.displaySize.description,
             duration(info.duration),
@@ -80,7 +83,7 @@ struct Formatting {
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
-    func progressBar(_ fraction: Double, width: Int = 30) -> String {
+    public func progressBar(_ fraction: Double, width: Int = 30) -> String {
         let clamped = min(max(fraction, 0), 1)
         let filled = Int((clamped * Double(width)).rounded())
         let bar = String(repeating: "█", count: filled) + String(repeating: "░", count: width - filled)
@@ -89,13 +92,5 @@ struct Formatting {
 
     private func number(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(1)).locale(locale))
-    }
-}
-
-extension PresetChoice {
-    /// The CLI spelling of a core preset, for suggestions like "tente --preset smallest".
-    init?(_ preset: Preset) {
-        guard let match = Self.allCases.first(where: { $0.preset == preset }) else { return nil }
-        self = match
     }
 }
