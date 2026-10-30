@@ -47,6 +47,17 @@ public struct Formatting: Sendable {
         return "\(number(seconds)) s"
     }
 
+    /// "HEVC", "H.264", "ProRes"… from the four-character code; unknown codes are shown as-is.
+    public func codec(_ fourCC: String) -> String {
+        switch fourCC {
+        case "hvc1", "hev1": "HEVC"
+        case "dvh1", "dvhe": "Dolby Vision"
+        case "avc1", "avc3": "H.264"
+        case "apcn", "apch", "apcs", "apco", "ap4h", "ap4x": "ProRes"
+        default: fourCC.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
     public func frameRate(_ fps: Double) -> String {
         fps.formatted(.number.precision(.fractionLength(0...2)).locale(locale)) + " fps"
     }

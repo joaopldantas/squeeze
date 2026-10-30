@@ -34,6 +34,13 @@ struct FormattingTests {
         #expect(format.duration(seconds) == expected)
     }
 
+    @Test("nome do codec", arguments: [
+        ("hvc1", "HEVC"), ("avc1", "H.264"), ("apcn", "ProRes"), ("dvh1", "Dolby Vision"), ("mp4v", "mp4v")
+    ])
+    func codec(fourCC: String, expected: String) {
+        #expect(format.codec(fourCC) == expected)
+    }
+
     @Test("barra de progresso")
     func progressBar() {
         #expect(format.progressBar(0.5, width: 10) == "[█████░░░░░]  50%")
