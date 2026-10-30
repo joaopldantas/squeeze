@@ -35,10 +35,14 @@ public struct ConversionResult: Hashable, Sendable {
     public var comparison: SizeComparison
     public var elapsed: Duration
 
-    /// Set when the output came out larger than the source: the preset to offer instead.
+    /// Set when a re-encode came out larger than the source: the preset to offer instead.
     public var suggestedPreset: Preset?
     /// The plan's warnings, minus any the finished file proved unnecessary.
     public var warnings: [ConversionWarning]
+
+    public var outputGrewUnexpectedly: Bool {
+        VideoCompressor.outputGrewUnexpectedly(comparison, plan: plan)
+    }
 }
 
 /// Entry point of SqueezeCore: inspect → analyse → plan → rewrite → place.
@@ -117,7 +121,9 @@ public struct VideoCompressor: Sendable {
                 plan: preview.plan,
                 comparison: comparison,
                 elapsed: clock.now - start,
-                suggestedPreset: comparison.outputIsLarger ? request.preset.moreAggressive : nil,
+                suggestedPreset: Self.outputGrewUnexpectedly(comparison, plan: preview.plan)
+                    ? request.preset.moreAggressive
+                    : nil,
                 warnings: await confirmedWarnings(preview.plan.warnings, outputURL: outputURL)
                     + (skippedSeconds > 0 ? [.damagedEndSkipped(seconds: skippedSeconds)] : [])
             )
@@ -127,6 +133,11 @@ public struct VideoCompressor: Sendable {
     }
 
     // MARK: Helpers
+
+    /// A remux only adds container overhead (well under 1%), which isn't worth a warning.
+    static func outputGrewUnexpectedly(_ comparison: SizeComparison, plan: EncodingPlan) -> Bool {
+        comparison.outputIsLarger && !(plan.isPassthrough && comparison.savedFraction > -0.01)
+    }
 
     /// Recent VideoToolbox versions regenerate Dolby Vision 8.4 metadata when encoding HLG,
     /// so the "Dolby Vision dropped" warning is only kept if the output really lost it.
