@@ -25,13 +25,13 @@ public struct MenuBarPanel: View {
             }
             .help(viewModel.settings.presetKind.summary)
 
+            MiniDropZone(caption: "Com o preset \(viewModel.settings.presetKind.title)") { urls in
+                viewModel.addAndConvert(urls)
+            }
+            .frame(height: 96)
+
             let recent = viewModel.recentItems()
-            if recent.isEmpty {
-                Text("Solte vídeos no ícone da barra de menus para comprimir com o preset acima.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
+            if !recent.isEmpty {
                 VStack(spacing: 8) {
                     ForEach(recent) { item in
                         CompactItemRow(item: item, format: format)
