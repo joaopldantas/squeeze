@@ -28,15 +28,15 @@ public struct MotionAnalyzer: Sendable {
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
 
-        var fractions: [Double] = []
+        var samples: [FrameDifference] = []
         for time in sampleTimes(duration: duration) {
             guard !Task.isCancelled,
                   let first = try? await luma(at: time, generator: generator),
                   let second = try? await luma(at: time + pairSpacing, generator: generator)
             else { continue }
-            fractions.append(MotionLevel.changedFraction(first, second))
+            samples.append(FrameDifference(first, second))
         }
-        return MotionLevel.classify(changedFractions: fractions)
+        return MotionLevel.classify(samples)
     }
 
     /// Pair start times spread evenly over the video, leaving room for the second frame.

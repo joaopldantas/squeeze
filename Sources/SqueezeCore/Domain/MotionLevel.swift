@@ -1,13 +1,46 @@
 import Foundation
 
+/// How two sampled frames differ, as shares of their pixels.
+public struct FrameDifference: Hashable, Sendable {
+    /// Pixels whose luma moved more than the noise threshold: real motion.
+    public var changed: Double
+    /// Pixels that are (almost) bit-identical. Screen content stays pixel-exact between frames;
+    /// camera footage never does, because of sensor grain and subtle movement.
+    public var identical: Double
+
+    public init(changed: Double, identical: Double) {
+        self.changed = changed
+        self.identical = identical
+    }
+
+    /// Compares two equally sized greyscale frames. Mismatched sizes count as "no information".
+    public init(_ lhs: [UInt8], _ rhs: [UInt8], threshold: UInt8 = 12) {
+        guard lhs.count == rhs.count, !lhs.isEmpty else {
+            self.init(changed: 0, identical: 0)
+            return
+        }
+        let limit = Int(threshold)
+        var changed = 0
+        var identical = 0
+        for index in lhs.indices {
+            let delta = abs(Int(lhs[index]) - Int(rhs[index]))
+            if delta > limit { changed += 1 }
+            if delta <= 1 { identical += 1 }
+        }
+        let count = Double(lhs.count)
+        self.init(changed: Double(changed) / count, identical: Double(identical) / count)
+    }
+}
+
 /// How much the picture changes over time. Screen recordings are usually `.low`.
 public enum MotionLevel: String, Hashable, Sendable, Codable {
     case low
     case normal
     case high
 
-    static let lowThreshold = 0.03
-    static let highThreshold = 0.30
+    static let lowChangedThreshold = 0.03
+    static let lowIdenticalThreshold = 0.97
+    static let highChangedThreshold = 0.30
 
     var bitrateFactor: Double {
         switch self {
@@ -17,28 +50,23 @@ public enum MotionLevel: String, Hashable, Sendable, Codable {
         }
     }
 
-    /// Classifies by the median share of pixels that changed between sampled frame pairs.
-    /// The median keeps a single scene cut from making a static recording look busy.
-    public static func classify(changedFractions: [Double]) -> MotionLevel {
-        guard !changedFractions.isEmpty else { return .normal }
-        let sorted = changedFractions.sorted()
-        let middle = sorted.count / 2
-        let median = sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
-        switch median {
-        case ..<lowThreshold: return .low
-        case highThreshold...: return .high
-        default: return .normal
-        }
+    /// Classifies by the medians over sampled frame pairs; the median keeps a single scene cut
+    /// from making a static recording look busy.
+    ///
+    /// `.low` needs both little change *and* pixel-exact stillness: a slow aerial pan barely changes
+    /// either, but its grain means only ~85% of pixels repeat, and starving it of bits shows.
+    public static func classify(_ samples: [FrameDifference]) -> MotionLevel {
+        guard !samples.isEmpty else { return .normal }
+        let changed = median(samples.map(\.changed))
+        let identical = median(samples.map(\.identical))
+        if changed >= highChangedThreshold { return .high }
+        if changed < lowChangedThreshold, identical >= lowIdenticalThreshold { return .low }
+        return .normal
     }
 
-    /// Share of pixels whose luma differs by more than `threshold` between two equally sized frames.
-    public static func changedFraction(_ lhs: [UInt8], _ rhs: [UInt8], threshold: UInt8 = 12) -> Double {
-        guard lhs.count == rhs.count, !lhs.isEmpty else { return 0 }
-        let limit = Int(threshold)
-        var changed = 0
-        for index in lhs.indices where abs(Int(lhs[index]) - Int(rhs[index])) > limit {
-            changed += 1
-        }
-        return Double(changed) / Double(lhs.count)
+    private static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 }

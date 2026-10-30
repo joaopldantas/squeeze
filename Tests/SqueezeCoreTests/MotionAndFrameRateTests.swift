@@ -3,26 +3,34 @@ import Testing
 
 @Suite("Detecção de movimento")
 struct MotionLevelTests {
-    @Test(arguments: [
-        ([], MotionLevel.normal),
-        ([0.0, 0.01, 0.02], .low),
-        ([0.1, 0.15, 0.2], .normal),
-        ([0.4, 0.5, 0.9], .high),
-        // Um corte de cena não transforma uma gravação de tela parada em vídeo agitado.
-        ([0.0, 0.0, 0.01, 0.95], .low)
-    ])
-    func classify(fractions: [Double], expected: MotionLevel) {
-        #expect(MotionLevel.classify(changedFractions: fractions) == expected)
+    private static func samples(_ pairs: [(Double, Double)]) -> [FrameDifference] {
+        pairs.map { FrameDifference(changed: $0.0, identical: $0.1) }
     }
 
-    @Test("fração de pixels alterados respeita o limiar de ruído")
-    func changedFraction() {
+    @Test(arguments: [
+        ([], MotionLevel.normal),
+        // Gravação de tela: quase nada muda e o resto é idêntico pixel a pixel.
+        ([(0.0, 1.0), (0.01, 0.99), (0.02, 0.98)], .low),
+        // Panorâmica aérea lenta (medida no wallpaper "Golden Gate"): pouco muda, mas o grão impede pixels idênticos.
+        ([(0.002, 0.878), (0.0, 0.883), (0.003, 0.836)], .normal),
+        ([(0.1, 0.5), (0.15, 0.4), (0.2, 0.45)], .normal),
+        ([(0.4, 0.1), (0.5, 0.05), (0.9, 0.0)], .high),
+        // Um corte de cena não transforma uma gravação de tela parada em vídeo agitado.
+        ([(0.0, 1.0), (0.0, 1.0), (0.01, 0.99), (0.95, 0.0)], .low)
+    ])
+    func classify(pairs: [(Double, Double)], expected: MotionLevel) {
+        #expect(MotionLevel.classify(Self.samples(pairs)) == expected)
+    }
+
+    @Test("diferença entre quadros respeita o limiar de ruído")
+    func frameDifference() {
         let frame: [UInt8] = [10, 20, 30, 40]
-        #expect(MotionLevel.changedFraction(frame, frame) == 0)
-        #expect(MotionLevel.changedFraction(frame, [10, 20, 30, 52], threshold: 12) == 0)
-        #expect(MotionLevel.changedFraction(frame, [10, 20, 30, 53], threshold: 12) == 0.25)
-        #expect(MotionLevel.changedFraction(frame, [255, 255, 255, 255]) == 1)
-        #expect(MotionLevel.changedFraction(frame, [1, 2]) == 0, "tamanhos diferentes não são comparáveis")
+        #expect(FrameDifference(frame, frame) == FrameDifference(changed: 0, identical: 1))
+        #expect(FrameDifference(frame, [11, 20, 30, 52], threshold: 12) == FrameDifference(changed: 0, identical: 0.75))
+        let moved = FrameDifference(frame, [10, 20, 30, 53], threshold: 12)
+        #expect(moved == FrameDifference(changed: 0.25, identical: 0.75))
+        #expect(FrameDifference(frame, [255, 255, 255, 255]) == FrameDifference(changed: 1, identical: 0))
+        #expect(FrameDifference(frame, [1, 2]) == FrameDifference(changed: 0, identical: 0), "tamanhos diferentes")
     }
 }
 
