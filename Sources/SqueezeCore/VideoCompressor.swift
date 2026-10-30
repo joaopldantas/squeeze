@@ -26,6 +26,20 @@ public struct ConversionPreview: Hashable, Sendable {
     public var motion: MotionLevel
     public var plan: EncodingPlan
     public var estimate: SizeComparison
+
+    public init(
+        request: ConversionRequest,
+        info: MediaInfo,
+        motion: MotionLevel,
+        plan: EncodingPlan,
+        estimate: SizeComparison
+    ) {
+        self.request = request
+        self.info = info
+        self.motion = motion
+        self.plan = plan
+        self.estimate = estimate
+    }
 }
 
 public struct ConversionResult: Hashable, Sendable {
@@ -39,6 +53,24 @@ public struct ConversionResult: Hashable, Sendable {
     public var suggestedPreset: Preset?
     /// The plan's warnings, minus any the finished file proved unnecessary.
     public var warnings: [ConversionWarning]
+
+    public init(
+        outputURL: URL,
+        info: MediaInfo,
+        plan: EncodingPlan,
+        comparison: SizeComparison,
+        elapsed: Duration,
+        suggestedPreset: Preset? = nil,
+        warnings: [ConversionWarning] = []
+    ) {
+        self.outputURL = outputURL
+        self.info = info
+        self.plan = plan
+        self.comparison = comparison
+        self.elapsed = elapsed
+        self.suggestedPreset = suggestedPreset
+        self.warnings = warnings
+    }
 
     public var outputGrewUnexpectedly: Bool {
         VideoCompressor.outputGrewUnexpectedly(comparison, plan: plan)
@@ -61,21 +93,35 @@ public struct VideoCompressor: Sendable {
         self.planner = planner
     }
 
+    /// Reads the file (tracks, motion) and plans the conversion. Motion is always analysed, so the
+    /// preview can later be re-planned for any preset with `replan(_:for:)` without touching the file again.
     public func preview(_ request: ConversionRequest) async throws -> ConversionPreview {
         do {
             let info = try await inspector.inspect(request.source)
-            let motion = Self.usesMotion(request)
-                ? await motionAnalyzer.analyze(request.source, duration: info.duration)
-                : .normal
-            let plan = try planner.plan(for: request.preset, source: info, motion: motion, overrides: request.overrides)
-            let estimate = SizeComparison(
-                originalBytes: info.fileSize,
-                outputBytes: SizeEstimator.estimatedBytes(for: plan, source: info)
-            )
-            return ConversionPreview(request: request, info: info, motion: motion, plan: plan, estimate: estimate)
+            let motion = await motionAnalyzer.analyze(request.source, duration: info.duration)
+            return try plan(request, info: info, motion: motion)
         } catch {
             throw SqueezeError.classify(error)
         }
+    }
+
+    /// Plans `request` from facts a previous preview already gathered. Synchronous and cheap:
+    /// meant for updating estimates live while the user changes settings.
+    public func replan(_ preview: ConversionPreview, for request: ConversionRequest) throws -> ConversionPreview {
+        do {
+            return try plan(request, info: preview.info, motion: preview.motion)
+        } catch {
+            throw SqueezeError.classify(error)
+        }
+    }
+
+    private func plan(_ request: ConversionRequest, info: MediaInfo, motion: MotionLevel) throws -> ConversionPreview {
+        let plan = try planner.plan(for: request.preset, source: info, motion: motion, overrides: request.overrides)
+        let estimate = SizeComparison(
+            originalBytes: info.fileSize,
+            outputBytes: SizeEstimator.estimatedBytes(for: plan, source: info)
+        )
+        return ConversionPreview(request: request, info: info, motion: motion, plan: plan, estimate: estimate)
     }
 
     /// Converts `request.source`. Pass a `preview` computed earlier to skip inspecting the file again.
@@ -153,11 +199,6 @@ public struct VideoCompressor: Sendable {
             if case .dolbyVisionMetadataDropped = warning { return false }
             return true
         }
-    }
-
-    static func usesMotion(_ request: ConversionRequest) -> Bool {
-        guard request.overrides.videoBitrate == nil else { return false }
-        return PresetProfile.profile(for: request.preset)?.adaptsToMotion ?? false
     }
 
     private static func availableCapacity(at directory: URL) -> Int64? {

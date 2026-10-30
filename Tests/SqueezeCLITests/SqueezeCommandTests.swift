@@ -85,4 +85,11 @@ struct SqueezeCommandTests {
             try parse(arguments)
         }
     }
+
+    @Test("sugestão de preset usa o nome da CLI")
+    func presetSpelling() {
+        #expect(PresetChoice(.smallest) == .smallest)
+        #expect(PresetChoice(.web(.p720)) == .web720)
+        #expect(PresetChoice(.targetSize(megabytes: 5)) == nil)
+    }
 }

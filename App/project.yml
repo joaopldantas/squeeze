@@ -1,0 +1,56 @@
+# Generates Squeeze.xcodeproj (not committed): `xcodegen generate --spec App/project.yml`
+name: Squeeze
+options:
+  bundleIdPrefix: com.joaopldantas
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  SqueezeKit:
+    path: ..
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+
+targets:
+  Squeeze:
+    type: application
+    platform: macOS
+    sources:
+      - Squeeze
+    dependencies:
+      - package: SqueezeKit
+        product: SqueezeUI
+    info:
+      path: Squeeze/Info.plist
+      properties:
+        CFBundleDisplayName: Squeeze
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.video
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: © 2026 Joao Pedro. MIT License.
+        # Makes Squeeze appear in Finder's "Open With" and accept videos dropped on its Dock icon.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Video
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.apple.quicktime-movie
+              - public.mpeg-4
+              - com.apple.m4v-video
+              - public.movie
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.joaopldantas.squeeze
+        PRODUCT_NAME: Squeeze
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        # Signed to run locally; a Developer ID is only needed to distribute builds.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""

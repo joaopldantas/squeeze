@@ -47,3 +47,11 @@ enum FrameRateChoice: String, CaseIterable, ExpressibleByArgument {
         }
     }
 }
+
+extension PresetChoice {
+    /// The CLI spelling of a core preset, for suggestions like "tente --preset smallest".
+    init?(_ preset: Preset) {
+        guard let match = Self.allCases.first(where: { $0.preset == preset }) else { return nil }
+        self = match
+    }
+}

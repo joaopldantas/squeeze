@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SqueezeCore", targets: ["SqueezeCore"]),
+        .library(name: "SqueezeUI", targets: ["SqueezeUI"]),
         .executable(name: "squeeze", targets: ["SqueezeCLI"])
     ],
     dependencies: [
@@ -13,6 +14,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "SqueezeCore"),
+        .target(
+            name: "SqueezeUI",
+            dependencies: ["SqueezeCore"]
+        ),
         .executableTarget(
             name: "SqueezeCLI",
             dependencies: [
@@ -23,6 +28,10 @@ let package = Package(
         .testTarget(
             name: "SqueezeCoreTests",
             dependencies: ["SqueezeCore"]
+        ),
+        .testTarget(
+            name: "SqueezeUITests",
+            dependencies: ["SqueezeUI"]
         ),
         .testTarget(
             name: "SqueezeCLITests",

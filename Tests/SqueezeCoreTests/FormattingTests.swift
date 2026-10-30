@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-@testable import SqueezeCLI
 @testable import SqueezeCore
 
 @Suite("Formatação da saída")
@@ -35,6 +34,13 @@ struct FormattingTests {
         #expect(format.duration(seconds) == expected)
     }
 
+    @Test("nome do codec", arguments: [
+        ("hvc1", "HEVC"), ("avc1", "H.264"), ("apcn", "ProRes"), ("dvh1", "Dolby Vision"), ("mp4v", "mp4v")
+    ])
+    func codec(fourCC: String, expected: String) {
+        #expect(format.codec(fourCC) == expected)
+    }
+
     @Test("barra de progresso")
     func progressBar() {
         #expect(format.progressBar(0.5, width: 10) == "[█████░░░░░]  50%")
@@ -63,12 +69,5 @@ struct FormattingTests {
         )
         let expected = "HEVC · 1920×1080 · 4,0 Mbps · até 60 fps · HDR · áudio AAC 128 kbps"
         #expect(format.plan(encode, source: source) == expected)
-    }
-
-    @Test("sugestão de preset usa o nome da CLI")
-    func presetSpelling() {
-        #expect(PresetChoice(.smallest) == .smallest)
-        #expect(PresetChoice(.web(.p720)) == .web720)
-        #expect(PresetChoice(.targetSize(megabytes: 5)) == nil)
     }
 }
