@@ -9,6 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-native-34C759)
 ![No ffmpeg](https://img.shields.io/badge/dependencies-no%20ffmpeg-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 
 [Features](#features) •
 [Quick start](#quick-start) •
@@ -17,7 +18,8 @@
 [Design decisions](#design-decisions) •
 [Benchmarks](#benchmarks) •
 [Testing](#testing) •
-[Roadmap](#roadmap)
+[Roadmap](#roadmap) •
+[License](#license)
 
 </div>
 
@@ -291,3 +293,7 @@ swift test
 ```
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat(core): …`, `fix(cli): …`).
+
+## License
+
+Squeeze is released under the [MIT License](LICENSE).
