@@ -81,6 +81,26 @@ public final class CompressionViewModel {
 
     public var canConvert: Bool { items.contains(where: \.canConvert) }
 
+    /// Average progress of the work in flight (files converting, waiting, or dropped and still being
+    /// analysed), for the menu bar icon. `nil` when nothing is pending.
+    public var activeProgress: Double? {
+        let active = items.compactMap { item -> Double? in
+            switch item.phase {
+            case .converting(let progress): progress
+            case .queued: 0
+            case .analyzing where item.convertsWhenReady: 0
+            default: nil
+            }
+        }
+        guard !active.isEmpty else { return nil }
+        return active.reduce(0, +) / Double(active.count)
+    }
+
+    /// Newest files first, for the menu bar panel.
+    public func recentItems(limit: Int = 5) -> [QueueItem] {
+        Array(items.suffix(limit).reversed())
+    }
+
     public var summary: QueueSummary {
         var summary = QueueSummary()
         for item in items {
@@ -140,6 +160,13 @@ public final class CompressionViewModel {
 
     public func dismissNotice() {
         notice = nil
+    }
+
+    /// Whether a drag carries anything `add(_:)` would take: a video, or a folder that may hold some.
+    public static func accepts(_ urls: [URL]) -> Bool {
+        urls.contains { url in
+            isVideo(url) || (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        }
     }
 
     static func isVideo(_ url: URL) -> Bool {
