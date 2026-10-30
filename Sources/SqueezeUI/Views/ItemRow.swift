@@ -158,10 +158,12 @@ struct ItemRow: View {
 struct ThumbnailView: View {
     let thumbnail: Thumbnail?
     let isLoading: Bool
+    /// 16:9 box; the height follows the width.
+    var width: CGFloat = 112
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(.quaternary)
+            RoundedRectangle(cornerRadius: width / 18).fill(.quaternary)
             if let thumbnail {
                 Image(decorative: thumbnail.image, scale: 1)
                     .resizable()
@@ -172,8 +174,8 @@ struct ThumbnailView: View {
                 Image(systemName: "film").foregroundStyle(.secondary)
             }
         }
-        .frame(width: 112, height: 63)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(width: width, height: width * 9 / 16)
+        .clipShape(RoundedRectangle(cornerRadius: width / 18))
         .accessibilityHidden(true)
     }
 }

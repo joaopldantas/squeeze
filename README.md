@@ -34,7 +34,8 @@ It ships as a **native macOS app**, a **command-line tool** (`squeeze`) and a **
 ## Features
 
 - **A native Mac app:**
-  - **Getting files in:** drop videos (or folders) on the window or the Dock icon, use Finder's *Open With*, or right-click in Finder and pick *Services → Comprimir com Squeeze*.
+  - **Menu bar icon:** drag a video towards the top of the screen and a small drop zone slides out under the icon; drop it there and it compresses right away with the current preset. The icon turns into a progress ring while it works; click it for a drop zone, the latest files and a quick preset picker. Squeeze can also hide its Dock icon and live only in the menu bar.
+  - **Other ways in:** drop videos (or folders) on the window or the Dock icon, use Finder's *Open With*, or right-click in Finder and pick *Services → Comprimir com Squeeze*.
   - **Before you convert:** every file shows a thumbnail, its resolution, duration and codec, and the estimated size and saving. The estimates update live as you change settings.
   - **Batch:** files convert one or two at a time. Each file can be cancelled on its own, and a notification sums up the batch when it ends.
 - **HEVC or H.264 in MP4:** HEVC (H.265) is the default and makes the smallest files. H.264 is there for maximum compatibility (WhatsApp, older browsers, Windows).
@@ -78,7 +79,7 @@ xcodegen generate --spec App/project.yml
 open App/Squeeze.xcodeproj   # then ⌘R
 ```
 
-1. Drop videos on the window, or add them with ⌘O.
+1. Drop videos on the window, or add them with ⌘O. To skip the window entirely, drag them towards the menu bar icon and drop them on the zone that opens.
 2. Pick a preset in the sidebar and watch the estimates change.
 3. Press **Converter** (⌘↩). Results land next to the originals, or in a folder you choose.
 
@@ -272,7 +273,7 @@ swift test --filter SqueezeUITests            # the app's view model, with fakes
 swift test --filter SqueezeIntegrationTests   # real encodes
 ```
 
-- **137 tests** written with **Swift Testing**, using parameterised cases wherever the rule is a table.
+- **143 tests** written with **Swift Testing**, using parameterised cases wherever the rule is a table.
 - **Unit tests** cover the bitrate model, target-size maths, aspect-ratio scaling, collision-free naming, preset mapping, size estimation, motion classification, frame-rate limiting, error classification and CLI parsing.
 - **App tests** drive the real `CompressionViewModel` with a scripted fake compressor:
   - **Adding files:** filtering non-videos, skipping duplicates and expanding dropped folders.
@@ -306,11 +307,11 @@ Sources/
 │   ├── ViewModel/                # CompressionViewModel: analysis, live planning, batch workers
 │   ├── Model/                    # QueueItem, CompressionSettings, batch report and notification text
 │   ├── Services/                 # Protocols for the compressor, thumbnails and settings storage
-│   └── Views/                    # Drop zone, file list, settings inspector, summary bar
+│   └── Views/                    # Drop zone, file list, settings inspector, summary bar, menu bar panel
 └── SqueezeCLI/                   # `squeeze` command (swift-argument-parser)
 App/
 ├── project.yml                   # XcodeGen spec: document types, Finder service, signing
-└── Squeeze/                      # @main app, AppDelegate (Open With, service, notifications), icon
+└── Squeeze/                      # @main app, AppDelegate (Open With, service, notifications), menu bar icon
 Tests/
 ├── SqueezeCoreTests/             # Unit tests
 ├── SqueezeUITests/               # View model tests with fakes
@@ -328,6 +329,7 @@ scripts/
 - [x] Batch queue with limited concurrency and per-item cancellation
 - [x] "Show in Finder" and a notification when a batch finishes
 - [x] Finder action: *Comprimir com Squeeze* (a macOS service)
+- [x] Menu bar icon with a drop zone that opens while dragging, and live progress
 - [ ] Signed and notarized release download
 - [ ] Benchmarks for iPhone videos and macOS screen recordings
 - [ ] English localisation of the app and CLI

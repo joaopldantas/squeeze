@@ -277,6 +277,49 @@ struct CompressionViewModelTests {
         #expect(viewModel.items.first?.phase == .ready)
     }
 
+    // MARK: Barra de menus
+
+    @Test("progresso geral: nil parado, média do que está em andamento")
+    func activeProgress() async throws {
+        compressor.block("a.mov")
+        let viewModel = makeViewModel()
+        try await analyzed(viewModel, "a.mov", "b.mov")
+        #expect(viewModel.activeProgress == nil)
+
+        viewModel.convertAll()
+        #expect(await eventually { viewModel.items[0].phase == .converting(progress: 0.5) })
+        #expect(viewModel.activeProgress == 0.25, "0,5 convertendo + 0 na fila")
+
+        viewModel.cancelAll()
+        #expect(await eventually { !viewModel.isConverting })
+        #expect(viewModel.activeProgress == nil)
+    }
+
+    @Test("arquivo solto no ícone conta como trabalho desde a análise")
+    func droppedFileIsActiveWhileAnalyzing() {
+        let viewModel = makeViewModel()
+        viewModel.add(urls("so-adicionado.mov"))
+        #expect(viewModel.activeProgress == nil)
+
+        viewModel.addAndConvert(urls("solto.mov"))
+        #expect(viewModel.activeProgress == 0)
+    }
+
+    @Test("recentes: os mais novos primeiro, com limite")
+    func recentItems() {
+        let viewModel = makeViewModel()
+        viewModel.add(urls("1.mov", "2.mov", "3.mov"))
+        #expect(viewModel.recentItems(limit: 2).map(\.name) == ["3.mov", "2.mov"])
+    }
+
+    @Test("o ícone aceita vídeos e pastas, recusa o resto")
+    func acceptsDrop() throws {
+        let folder = FileManager.default.temporaryDirectory
+        #expect(CompressionViewModel.accepts([URL(fileURLWithPath: "/tmp/a.mov")]))
+        #expect(CompressionViewModel.accepts([URL(fileURLWithPath: "/tmp/a.txt"), folder]))
+        #expect(!CompressionViewModel.accepts([URL(fileURLWithPath: "/tmp/a.txt"), URL(fileURLWithPath: "/tmp/b.pdf")]))
+    }
+
     @Test("limpar concluídos mantém os pendentes")
     func clearCompleted() async throws {
         compressor.fail("b.mov", with: .diskFull)

@@ -11,6 +11,7 @@ struct SqueezeApp: App {
         // A single window: files opened from Finder join its list instead of spawning new windows.
         Window("Squeeze", id: "main") {
             RootView(viewModel: appDelegate.viewModel)
+                .background(OpenWindowBridge { appDelegate.openMainWindow = $0 })
         }
         .defaultSize(width: 1000, height: 640)
         .commands {
@@ -19,11 +20,32 @@ struct SqueezeApp: App {
     }
 }
 
+/// Hands SwiftUI's `openWindow` action to AppKit code (the menu bar panel, Dock reopen).
+private struct OpenWindowBridge: View {
+    @Environment(\.openWindow) private var openWindow
+    let register: (@escaping @MainActor () -> Void) -> Void
+
+    var body: some View {
+        Color.clear.onAppear {
+            register { openWindow(id: "main") }
+        }
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let viewModel = CompressionViewModel()
+    let preferences = AppPreferences()
+    var openMainWindow: @MainActor () -> Void = {}
+    private var statusItem: StatusItemController?
+    private var dropShelf: DropShelfController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        preferences.applyActivationPolicy()
+        statusItem = StatusItemController(viewModel: viewModel, preferences: preferences) { [weak self] in
+            self?.showMainWindow()
+        }
+        dropShelf = DropShelfController(viewModel: viewModel) { [weak self] in self?.statusItem?.iconFrame }
         UNUserNotificationCenter.current().delegate = self
         viewModel.onBatchStarted = { [weak self] in self?.requestNotificationPermission() }
         viewModel.onBatchFinished = { [weak self] report in self?.notify(report) }
@@ -36,8 +58,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewModel.add(urls)
     }
 
+    /// The menu bar icon keeps working with the window closed.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// Clicking the Dock icon with no window open brings the window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            showMainWindow()
+        }
+        return true
+    }
+
+    /// `openWindow` focuses the window if it exists and recreates it if it was closed.
+    private func showMainWindow() {
+        NSApp.activate()
+        openMainWindow()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
