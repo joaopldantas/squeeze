@@ -40,6 +40,9 @@ final class AssetRewriter: @unchecked Sendable {
     }
 
     private static let progressGranularity = 0.005
+    /// A read failure this close to the end is treated as a damaged tail, not a broken file.
+    /// AVAssetReader reads ahead about a second, so damage at the very end already costs ~1 s of video.
+    static let damagedTailTolerance = (seconds: 2.0, fraction: 0.02)
 
     private let reader: AVAssetReader
     private let writer: AVAssetWriter
@@ -54,7 +57,9 @@ final class AssetRewriter: @unchecked Sendable {
         self.duration = duration
     }
 
-    func run(progress: @escaping @Sendable (Double) -> Void) async throws {
+    /// Returns how many seconds at the end were skipped because they couldn't be decoded (normally 0).
+    @discardableResult
+    func run(progress: @escaping @Sendable (Double) -> Void) async throws -> Double {
         try await withTaskCancellationHandler {
             try await transfer(progress: progress)
         } onCancel: {
@@ -62,7 +67,7 @@ final class AssetRewriter: @unchecked Sendable {
         }
     }
 
-    private func transfer(progress: @escaping @Sendable (Double) -> Void) async throws {
+    private func transfer(progress: @escaping @Sendable (Double) -> Void) async throws -> Double {
         guard reader.startReading() else { throw failure(reader.error) }
         guard writer.startWriting() else {
             reader.cancelReading()
@@ -84,12 +89,24 @@ final class AssetRewriter: @unchecked Sendable {
             reader.cancelReading()
             throw failure(writer.error)
         }
+        var skippedSeconds = 0.0
         if reader.status == .failed {
-            abort()
-            throw failure(reader.error)
+            let missing = duration - state.withLock(\.furthestTimestamp)
+            guard Self.isDamagedTail(missing: missing, duration: duration) else {
+                abort()
+                throw failure(reader.error)
+            }
+            // Every lane already marked itself finished when the reader stopped; keep what was read.
+            skippedSeconds = max(0, missing)
         }
         await writer.finishWriting()
         guard writer.status == .completed else { throw failure(writer.error) }
+        return skippedSeconds
+    }
+
+    static func isDamagedTail(missing: Double, duration: Double) -> Bool {
+        guard duration > 0, missing.isFinite else { return false }
+        return missing <= max(damagedTailTolerance.seconds, duration * damagedTailTolerance.fraction)
     }
 
     private func abort() {

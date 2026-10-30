@@ -38,9 +38,11 @@ struct SqueezeErrorTests {
         #expect(SqueezeError.classify(error) == .drmProtected)
     }
 
-    @Test("arquivo corrompido")
-    func corrupted() {
-        let error = NSError(domain: AVFoundationErrorDomain, code: AVError.Code.fileFormatNotRecognized.rawValue)
+    @Test("arquivo corrompido ou truncado", arguments: [
+        AVError.Code.fileFormatNotRecognized, .decodeFailed, .fileFailedToParse, .invalidSampleCursor
+    ])
+    func corrupted(code: AVError.Code) {
+        let error = NSError(domain: AVFoundationErrorDomain, code: code.rawValue)
         guard case .unreadableFile = SqueezeError.classify(error) else {
             Issue.record("esperava unreadableFile")
             return

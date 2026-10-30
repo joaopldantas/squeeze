@@ -86,7 +86,8 @@ extension SqueezeError {
             return .drmProtected
         case (AVFoundationErrorDomain, AVError.Code.fileFormatNotRecognized.rawValue),
              (AVFoundationErrorDomain, AVError.Code.decodeFailed.rawValue),
-             (AVFoundationErrorDomain, AVError.Code.fileFailedToParse.rawValue):
+             (AVFoundationErrorDomain, AVError.Code.fileFailedToParse.rawValue),
+             (AVFoundationErrorDomain, AVError.Code.invalidSampleCursor.rawValue):
             return .unreadableFile(reason: "AVFoundation \(code)")
         case (NSCocoaErrorDomain, NSFileWriteNoPermissionError),
              (NSCocoaErrorDomain, NSFileWriteVolumeReadOnlyError),

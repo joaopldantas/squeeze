@@ -46,6 +46,8 @@ enum FixtureFactory {
         let url = directory.appendingPathComponent(spec.name).appendingPathExtension("mov")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         writer.metadata = metadata(for: spec)
+        // Puts the sample tables first, so cutting the end of the file only damages the last samples.
+        writer.shouldOptimizeForNetworkUse = true
 
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(for: spec))
         videoInput.transform = spec.transform
@@ -120,6 +122,16 @@ enum FixtureFactory {
             written += count
             return true
         }
+    }
+
+    /// A valid movie whose last `fraction` of bytes was chopped off, like an interrupted copy.
+    static func makeTruncated(_ spec: FixtureSpec, cutting fraction: Double, in directory: URL) async throws -> URL {
+        let url = try await make(spec, in: directory)
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        let size = try handle.seekToEnd()
+        try handle.truncate(atOffset: size - UInt64(Double(size) * fraction))
+        return url
     }
 
     /// Writes random bytes with a `.mov` extension.

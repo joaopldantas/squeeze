@@ -103,7 +103,7 @@ public struct VideoCompressor: Sendable {
             let rewriter = try await AssetRewriter.make(
                 for: preview.plan, source: preview.info, outputURL: workspace.temporaryFileURL
             )
-            try await rewriter.run(progress: progress)
+            let skippedSeconds = try await rewriter.run(progress: progress)
             try Task.checkCancellation()
 
             let outputURL = try workspace.claimFinalURL(for: request.source, in: directory)
@@ -119,6 +119,7 @@ public struct VideoCompressor: Sendable {
                 elapsed: clock.now - start,
                 suggestedPreset: comparison.outputIsLarger ? request.preset.moreAggressive : nil,
                 warnings: await confirmedWarnings(preview.plan.warnings, outputURL: outputURL)
+                    + (skippedSeconds > 0 ? [.damagedEndSkipped(seconds: skippedSeconds)] : [])
             )
         } catch {
             throw SqueezeError.classify(error)

@@ -26,6 +26,41 @@ struct ErrorHandlingIntegrationTests {
         #expect(try directory.allContents() == ["corrompido.mov"])
     }
 
+    @Test("fim danificado: converte o que dá para ler e avisa")
+    func damagedTail() async throws {
+        // Video only, like the wallpaper that exposed this: with interleaved audio, AVAssetReader's
+        // read-ahead hits the missing audio first and stops every track early, which is (correctly) an error.
+        var spec = FixtureSpec.landscape
+        spec.duration = 4
+        spec.includesAudio = false
+        let source = try await FixtureFactory.makeTruncated(spec, cutting: 0.002, in: directory.url)
+
+        let result = try await compressor.compress(ConversionRequest(source: source))
+        let skipped = result.warnings.compactMap { warning -> Double? in
+            if case .damagedEndSkipped(let seconds) = warning { return seconds }
+            return nil
+        }
+        #expect(skipped.count == 1)
+        #expect(skipped.first.map { $0 > 0 && $0 <= 2 } == true, "pulou \(skipped)")
+        #expect(FileManager.default.fileExists(atPath: result.outputURL.path))
+    }
+
+    @Test("arquivo muito danificado continua sendo erro")
+    func heavilyDamaged() async throws {
+        var spec = FixtureSpec.landscape
+        spec.duration = 4
+        let source = try await FixtureFactory.makeTruncated(spec, cutting: 0.5, in: directory.url)
+
+        let error = await #expect(throws: SqueezeError.self) {
+            try await compressor.compress(ConversionRequest(source: source))
+        }
+        guard case .unreadableFile = error else {
+            Issue.record("esperava unreadableFile, veio \(String(describing: error))")
+            return
+        }
+        #expect(try directory.allContents() == ["landscape.mov"])
+    }
+
     @Test("arquivo inexistente")
     func missingFile() async {
         let source = directory.url.appendingPathComponent("sumiu.mov")
