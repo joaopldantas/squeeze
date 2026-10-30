@@ -27,12 +27,16 @@
 
 Screen recordings and iPhone videos are huge: a five-minute screen capture can easily take up a gigabyte. Squeeze re-encodes them with the media engine in Apple Silicon. It picks a bitrate that fits the content, so a static screen recording gets far fewer bits than handheld camera footage. It keeps what matters: orientation, capture date, location and HDR.
 
-It ships as a **Swift package** (`SqueezeCore`), a **command-line tool** (`squeeze`) and, soon, a **SwiftUI app**. All three share the same engine.
+It ships as a **native macOS app**, a **command-line tool** (`squeeze`) and a **Swift package** (`SqueezeCore`). All three share the same engine.
 
-<!-- Screenshots and a demo GIF of the macOS app go here once the app ships (see Roadmap). -->
+<!-- Add a screenshot and a demo GIF of the app here. -->
 
 ## Features
 
+- **A native Mac app:**
+  - **Getting files in:** drop videos (or folders) on the window or the Dock icon, use Finder's *Open With*, or right-click in Finder and pick *Services → Comprimir com Squeeze*.
+  - **Before you convert:** every file shows a thumbnail, its resolution, duration and codec, and the estimated size and saving. The estimates update live as you change settings.
+  - **Batch:** files convert one or two at a time. Each file can be cancelled on its own, and a notification sums up the batch when it ends.
 - **HEVC or H.264 in MP4:** HEVC (H.265) is the default and makes the smallest files. H.264 is there for maximum compatibility (WhatsApp, older browsers, Windows).
 - **Content-aware bitrate:** the bitrate scales with resolution and frame rate. Sampled frames are compared to detect screen recordings, which get a lower bitrate. The bitrate never goes above 80% of the source's, so a re-encode doesn't come out bigger than the original.
 - **Target size:** ask for "25 MB" and Squeeze works out the bitrate from the duration, after setting aside the audio and the container overhead. If the budget is too small for the resolution, it scales the video down instead of letting it turn into blocks.
@@ -60,7 +64,25 @@ It ships as a **Swift package** (`SqueezeCore`), a **command-line tool** (`squee
 ### Requirements
 
 - macOS 14 Sonoma or later
-- Swift 6 toolchain (Xcode 16+ or the Command Line Tools)
+- Xcode 16+ to build the app; the command-line tool and the package also build with the Command Line Tools alone
+
+### macOS app
+
+The Xcode project is generated from [`App/project.yml`](App/project.yml) with [XcodeGen](https://github.com/yonaskolb/XcodeGen), so no `.pbxproj` lives in git:
+
+```bash
+git clone https://github.com/joaopldantas/squeeze.git
+cd squeeze
+brew install xcodegen
+xcodegen generate --spec App/project.yml
+open App/Squeeze.xcodeproj   # then ⌘R
+```
+
+1. Drop videos on the window, or add them with ⌘O.
+2. Pick a preset in the sidebar and watch the estimates change.
+3. Press **Converter** (⌘↩). Results land next to the originals, or in a folder you choose.
+
+The Finder service (*Services → Comprimir com Squeeze*) appears once the app has run from `/Applications`; during development, run `/System/Library/CoreServices/pbs -update` to register it. The app's interface is in Portuguese.
 
 ### Command-line tool
 
@@ -219,6 +241,12 @@ Re-encoding is what makes files smaller, but every re-encode loses some quality.
 
 The package builds in **Swift 6 language mode** with strict concurrency checking. AVFoundation's reader and writer aren't `Sendable`, so the rewriter keeps each one confined to its own dispatch queue, and every shared value lives behind an `OSAllocatedUnfairLock`. The only `@unchecked Sendable` types are the ones whose thread confinement is documented next to the code.
 
+### A package-first app
+
+The Xcode target is a thin shell: an `@main` struct, an app delegate for Finder integration, and the icon. Everything else lives in the `SqueezeUI` module of the Swift package, which keeps the logic buildable and testable with plain `swift test` and runs it in CI without Xcode. The services (compressor, thumbnails, settings storage) sit behind protocols, so the view-model tests use deterministic fakes instead of real encodes.
+
+The batch runs on a small pool of worker tasks. Each worker takes the next queued file and marks it as converting before it suspends for the first time, all on the main actor. That makes "claim" atomic without locks: two workers can never pick the same file. Files added, removed or cancelled in the middle of a batch need no extra bookkeeping.
+
 ## Benchmarks
 
 Measured with the release CLI on an **Apple M4 Mac (16 GB), macOS 27**. The sources are the macOS wallpaper videos, which are already very efficiently encoded HEVC (4K, 240 fps). That is close to a worst case for compression: camera footage and H.264 screen recordings typically shrink much more.
@@ -240,11 +268,18 @@ The time is dominated by *decoding* 240 fps 4K, not by encoding. On a centre cro
 ```bash
 swift test                                    # everything
 swift test --filter SqueezeCoreTests          # fast, pure unit tests
+swift test --filter SqueezeUITests            # the app's view model, with fakes
 swift test --filter SqueezeIntegrationTests   # real encodes
 ```
 
-- **110 tests** written with **Swift Testing**, using parameterised cases wherever the rule is a table.
+- **137 tests** written with **Swift Testing**, using parameterised cases wherever the rule is a table.
 - **Unit tests** cover the bitrate model, target-size maths, aspect-ratio scaling, collision-free naming, preset mapping, size estimation, motion classification, frame-rate limiting, error classification and CLI parsing.
+- **App tests** drive the real `CompressionViewModel` with a scripted fake compressor:
+  - **Adding files:** filtering non-videos, skipping duplicates and expanding dropped folders.
+  - **Live estimates:** settings changes re-plan every file without reading it again.
+  - **Batch:** files run in order, one or two at a time, and each batch reports only its own results.
+  - **Cancellation and failures:** cancelling a running or queued file, and one failure not stopping the rest.
+  - **Retries and settings:** retrying with a more aggressive preset, and loading settings saved by older versions.
 - **Integration tests** never use checked-in media. Every fixture is generated inside the test with `AVAssetWriter`, deterministically:
   - **Shapes:** landscape, portrait (stored rotated, like an iPhone), no audio, 1 second long, 60 fps.
   - **Formats:** HLG HDR (10-bit), ProRes, a static "screen recording" and a camera-like pan.
@@ -255,7 +290,7 @@ swift test --filter SqueezeIntegrationTests   # real encodes
   - **Size:** the output is smaller than the input (except for passthrough).
   - **Metadata and HDR:** metadata survives, and HDR is kept with HEVC and tone-mapped with H.264.
   - **Cancellation:** a job cancelled halfway leaves the folder exactly as it was.
-- **CI:** GitHub Actions runs SwiftLint (`--strict`), the build and both test suites on `macos-latest` for every push and pull request.
+- **CI:** GitHub Actions runs SwiftLint (`--strict`), every test suite and an Xcode build of the app on `macos-latest` for every push and pull request.
 
 ## Project structure
 
@@ -266,22 +301,36 @@ Sources/
 │   ├── Analysis/                 # MediaInspector, MotionAnalyzer
 │   ├── Pipeline/                 # AssetRewriter, writer settings, metadata, output workspace
 │   ├── Errors/                   # SqueezeError and error classification
-│   └── VideoCompressor.swift     # Public entry point: preview() and compress()
+│   └── VideoCompressor.swift     # Public entry point: preview(), replan() and compress()
+├── SqueezeUI/                    # The app's logic and SwiftUI views (testable without the app)
+│   ├── ViewModel/                # CompressionViewModel: analysis, live planning, batch workers
+│   ├── Model/                    # QueueItem, CompressionSettings, batch report and notification text
+│   ├── Services/                 # Protocols for the compressor, thumbnails and settings storage
+│   └── Views/                    # Drop zone, file list, settings inspector, summary bar
 └── SqueezeCLI/                   # `squeeze` command (swift-argument-parser)
+App/
+├── project.yml                   # XcodeGen spec: document types, Finder service, signing
+└── Squeeze/                      # @main app, AppDelegate (Open With, service, notifications), icon
 Tests/
 ├── SqueezeCoreTests/             # Unit tests
-├── SqueezeCLITests/              # Argument parsing and output formatting
+├── SqueezeUITests/               # View model tests with fakes
+├── SqueezeCLITests/              # Argument parsing
 └── SqueezeIntegrationTests/      # End-to-end encodes with generated fixtures
+scripts/
+└── make-icon.swift               # Renders the app icon at every size
 ```
 
 ## Roadmap
 
 - [x] `SqueezeCore` engine with unit and integration tests
 - [x] `squeeze` command-line tool
-- [ ] SwiftUI app: drag and drop, "Open With", before/after estimate per file
-- [ ] Batch queue with limited concurrency and per-item cancellation
-- [ ] "Show in Finder" and a notification when a batch finishes
-- [ ] Finder Quick Action: *Compress with Squeeze*
+- [x] SwiftUI app: drag and drop, "Open With", before/after estimate per file
+- [x] Batch queue with limited concurrency and per-item cancellation
+- [x] "Show in Finder" and a notification when a batch finishes
+- [x] Finder action: *Comprimir com Squeeze* (a macOS service)
+- [ ] Signed and notarized release download
+- [ ] Benchmarks for iPhone videos and macOS screen recordings
+- [ ] English localisation of the app and CLI
 
 ## Contributing
 
