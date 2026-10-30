@@ -33,6 +33,8 @@ public final class QueueItem: Identifiable {
 
     /// Source facts gathered once; every settings change re-plans from here without reading the file.
     var analysis: ConversionPreview?
+    /// Added by the Finder action: start converting as soon as analysis finishes.
+    var convertsWhenReady = false
     var conversion: Task<Void, Never>?
 
     init(url: URL) {

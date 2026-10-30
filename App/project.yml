@@ -44,6 +44,14 @@ targets:
               - public.mpeg-4
               - com.apple.m4v-video
               - public.movie
+        # Finder: select videos → right click → Services → "Comprimir com Squeeze".
+        NSServices:
+          - NSMenuItem:
+              default: Comprimir com Squeeze
+            NSMessage: compressFiles
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.movie
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.joaopldantas.squeeze

@@ -25,6 +25,17 @@ public struct CompressionSettings: Hashable, Sendable, Codable {
     public var audio: AudioPolicy?
     /// `nil` writes next to each original.
     public var outputFolder: URL?
+    /// How many files convert at once. Two keeps the media engine busy while the other job reads or writes;
+    /// more than that only competes for the same hardware encoder.
+    public var maxConcurrentJobs = 1 {
+        didSet { maxConcurrentJobs = Self.clampedJobs(maxConcurrentJobs) }
+    }
+
+    public static let concurrencyRange = 1...2
+
+    static func clampedJobs(_ jobs: Int) -> Int {
+        min(max(jobs, concurrencyRange.lowerBound), concurrencyRange.upperBound)
+    }
 
     public init() {}
 
@@ -61,6 +72,32 @@ public struct CompressionSettings: Hashable, Sendable, Codable {
 
     public func request(for source: URL, preset override: Preset? = nil) -> ConversionRequest {
         ConversionRequest(source: source, preset: override ?? preset, overrides: overrides, output: outputLocation)
+    }
+}
+
+extension CompressionSettings {
+    private enum CodingKeys: String, CodingKey {
+        case presetKind, targetMegabytes, codec, maxLongEdge, frameRate, videoBitrateKbps, audio, outputFolder
+        case maxConcurrentJobs
+    }
+
+    /// Every key is optional, so settings saved by an older version (missing newer keys) still load
+    /// instead of silently resetting everything to defaults.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = CompressionSettings()
+        presetKind = try container.decodeIfPresent(PresetKind.self, forKey: .presetKind) ?? defaults.presetKind
+        targetMegabytes = try container.decodeIfPresent(Double.self, forKey: .targetMegabytes)
+            ?? defaults.targetMegabytes
+        codec = try container.decodeIfPresent(VideoCodec.self, forKey: .codec)
+        maxLongEdge = try container.decodeIfPresent(Int.self, forKey: .maxLongEdge)
+        frameRate = try container.decodeIfPresent(FrameRatePolicy.self, forKey: .frameRate)
+        videoBitrateKbps = try container.decodeIfPresent(Int.self, forKey: .videoBitrateKbps)
+        audio = try container.decodeIfPresent(AudioPolicy.self, forKey: .audio)
+        outputFolder = try container.decodeIfPresent(URL.self, forKey: .outputFolder)
+        let jobs = try container.decodeIfPresent(Int.self, forKey: .maxConcurrentJobs)
+        // `didSet` doesn't run during init, so clamp here too.
+        maxConcurrentJobs = Self.clampedJobs(jobs ?? defaults.maxConcurrentJobs)
     }
 }
 

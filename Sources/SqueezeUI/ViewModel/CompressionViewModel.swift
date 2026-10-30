@@ -3,6 +3,28 @@ import Observation
 import SqueezeCore
 import UniformTypeIdentifiers
 
+/// What one batch achieved, for the end-of-batch notification.
+public struct BatchReport: Equatable, Sendable {
+    public var completed = 0
+    public var failed = 0
+    public var cancelled = 0
+    public var sizes = SizeComparison(originalBytes: 0, outputBytes: 0)
+
+    public init() {}
+
+    mutating func record(_ phase: QueueItem.Phase) {
+        switch phase {
+        case .completed(let result):
+            completed += 1
+            sizes.originalBytes += result.comparison.originalBytes
+            sizes.outputBytes += result.comparison.outputBytes
+        case .failed: failed += 1
+        case .cancelled: cancelled += 1
+        default: break
+        }
+    }
+}
+
 /// Totals shown in the bottom bar.
 public struct QueueSummary: Equatable, Sendable {
     /// Files not converted yet that can be: current size → estimated size.
@@ -30,14 +52,17 @@ public final class CompressionViewModel {
     /// A short message about the last action, e.g. files that were skipped.
     public private(set) var notice: String?
 
+    /// Called when a batch starts. The app asks for notification permission here, in context.
+    public var onBatchStarted: (@MainActor () -> Void)?
     /// Called when a batch drains, with what it achieved. The app uses it for the notification.
-    public var onBatchFinished: (@MainActor (QueueSummary) -> Void)?
+    public var onBatchFinished: (@MainActor (BatchReport) -> Void)?
 
     private let compressor: any VideoCompressing
     private let thumbnails: any ThumbnailProviding
     private let store: (any SettingsStoring)?
     private var analysisLoop: Task<Void, Never>?
     private var conversionLoop: Task<Void, Never>?
+    private var batch = BatchReport()
 
     public init(
         compressor: any VideoCompressing = VideoCompressor(),
@@ -104,6 +129,15 @@ public final class CompressionViewModel {
         items.removeAll { $0.result != nil }
     }
 
+    /// The Finder action: add the files and convert them with the current settings, no further clicks.
+    public func addAndConvert(_ urls: [URL]) {
+        let before = Set(items.map(\.id))
+        add(urls)
+        for item in items where !before.contains(item.id) {
+            item.convertsWhenReady = true
+        }
+    }
+
     public func dismissNotice() {
         notice = nil
     }
@@ -162,16 +196,35 @@ public final class CompressionViewModel {
         items.filter(\.isBusy).forEach(cancel)
     }
 
+    /// Starts `maxConcurrentJobs` workers that each claim the next queued file until none is left.
     private func startConversions() {
         guard conversionLoop == nil else { return }
+        batch = BatchReport()
+        onBatchStarted?()
+        let workers = settings.maxConcurrentJobs
         conversionLoop = Task { [weak self] in
-            while let self, let next = self.items.first(where: { $0.phase == .queued }) {
-                await self.run(next)
+            await withTaskGroup(of: Void.self) { group in
+                for _ in 0..<workers {
+                    group.addTask { [weak self] in await self?.work() }
+                }
             }
             guard let self else { return }
             self.conversionLoop = nil
-            self.onBatchFinished?(self.summary)
+            self.onBatchFinished?(self.batch)
         }
+    }
+
+    private func work() async {
+        while let next = claimNext() {
+            await run(next)
+        }
+    }
+
+    /// Marks the next queued file as converting before any suspension, so two workers can't take the same one.
+    private func claimNext() -> QueueItem? {
+        guard let next = items.first(where: { $0.phase == .queued }) else { return nil }
+        next.phase = .converting(progress: 0)
+        return next
     }
 
     private func run(_ item: QueueItem) async {
@@ -179,7 +232,6 @@ public final class CompressionViewModel {
             item.phase = .ready
             return
         }
-        item.phase = .converting(progress: 0)
         let compressor = compressor
         let request = preview.request
         let task = Task { @MainActor [weak item] in
@@ -199,6 +251,7 @@ public final class CompressionViewModel {
         item.conversion = task
         await task.value
         item.conversion = nil
+        batch.record(item.phase)
     }
 
     // MARK: Analysis and planning
@@ -221,6 +274,9 @@ public final class CompressionViewModel {
             item.analysis = try await compressor.preview(ConversionRequest(source: item.url, preset: .balanced))
             item.phase = .ready
             replan(item)
+            if item.convertsWhenReady {
+                convert(item)
+            }
         } catch {
             item.phase = .failed(SqueezeError.classify(error))
         }

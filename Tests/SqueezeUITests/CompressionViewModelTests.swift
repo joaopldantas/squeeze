@@ -125,7 +125,7 @@ struct CompressionViewModelTests {
     @Test("converte em ordem, soma o economizado e avisa o fim do lote uma vez")
     func convertAll() async throws {
         let viewModel = makeViewModel()
-        var batches: [QueueSummary] = []
+        var batches: [BatchReport] = []
         viewModel.onBatchFinished = { batches.append($0) }
         try await analyzed(viewModel, "a.mov", "b.mov")
 
@@ -136,7 +136,8 @@ struct CompressionViewModelTests {
         #expect(viewModel.items.allSatisfy { $0.result != nil })
         #expect(viewModel.summary.completedCount == 2)
         #expect(viewModel.summary.pendingCount == 0)
-        #expect(batches.first?.completed.savedBytes ?? 0 > 0)
+        #expect(batches.first?.completed == 2)
+        #expect(batches.first?.sizes.savedBytes ?? 0 > 0)
         #expect(!viewModel.isConverting)
     }
 
@@ -219,6 +220,61 @@ struct CompressionViewModelTests {
         #expect(viewModel.items.isEmpty)
         #expect(await eventually { !viewModel.isConverting })
         #expect(item.phase == .cancelled)
+    }
+
+    // MARK: Lote
+
+    @Test("com 2 jobs simultâneos, dois arquivos convertem ao mesmo tempo", arguments: [1, 2])
+    func concurrencyLimit(jobs: Int) async throws {
+        compressor.block("a.mov")
+        compressor.block("b.mov")
+        let viewModel = makeViewModel()
+        viewModel.settings.maxConcurrentJobs = jobs
+        try await analyzed(viewModel, "a.mov", "b.mov", "c.mov")
+
+        viewModel.convertAll()
+        #expect(await eventually { viewModel.items[0].phase == .converting(progress: 0.5) })
+        try await Task.sleep(for: .milliseconds(50))
+        let converting = viewModel.items.filter { if case .converting = $0.phase { true } else { false } }
+        #expect(converting.count == jobs)
+        #expect(viewModel.items[2].phase == .queued)
+
+        viewModel.cancelAll()
+        #expect(await eventually { !viewModel.isConverting })
+    }
+
+    @Test("relatório do lote conta concluídos, falhas e cancelados só daquele lote")
+    func batchReport() async throws {
+        compressor.fail("b.mov", with: .diskFull)
+        compressor.block("c.mov")
+        let viewModel = makeViewModel()
+        var reports: [BatchReport] = []
+        viewModel.onBatchFinished = { reports.append($0) }
+        try await analyzed(viewModel, "a.mov", "b.mov", "c.mov")
+
+        viewModel.convertAll()
+        #expect(await eventually { viewModel.items[2].phase == .converting(progress: 0.5) })
+        viewModel.cancel(viewModel.items[2])
+        #expect(await eventually { reports.count == 1 })
+
+        let report = try #require(reports.first)
+        #expect((report.completed, report.failed, report.cancelled) == (1, 1, 1))
+
+        viewModel.convert(viewModel.items[1])
+        #expect(await eventually { reports.count == 2 })
+        let second = reports[1]
+        #expect(second.completed + second.failed + second.cancelled == 1, "o segundo lote não herda o primeiro")
+    }
+
+    @Test("ação do Finder adiciona e converte sem mais cliques")
+    func addAndConvert() async throws {
+        let viewModel = makeViewModel()
+        try await analyzed(viewModel, "ja-estava.mov")
+
+        viewModel.addAndConvert(urls("do-finder.mov"))
+        #expect(await eventually { viewModel.items.last?.result != nil })
+        #expect(compressor.compressed.map(\.name) == ["do-finder.mov"], "só o arquivo da ação é convertido")
+        #expect(viewModel.items.first?.phase == .ready)
     }
 
     @Test("limpar concluídos mantém os pendentes")
