@@ -48,6 +48,18 @@ struct SettingsPanel: View {
             Section("Saída") {
                 OutputOptions(settings: $settings)
             }
+
+            Section("Lote") {
+                Picker("Conversões simultâneas", selection: $settings.maxConcurrentJobs) {
+                    ForEach(CompressionSettings.concurrencyRange, id: \.self) { jobs in
+                        Text("\(jobs)").tag(jobs)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Duas aproveitam melhor o encoder enquanto a outra lê ou grava o disco.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
