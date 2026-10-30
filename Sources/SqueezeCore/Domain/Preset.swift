@@ -65,6 +65,10 @@ public struct EncodingOverrides: Hashable, Sendable, Codable {
 
 /// The knobs each re-encoding preset turns.
 struct PresetProfile: Equatable {
+    /// Above this, presets drop frames: the encoder can't make 120/240 fps frames small enough to hit
+    /// a sensible bitrate, and the file ends up larger than the source. `--fps keep` opts out.
+    static let maxFrameRate = 60
+
     var codec: VideoCodec
     /// HEVC bitrate for 1080p30 content with typical motion; scaled to the actual output.
     var referenceBitrate: Int
@@ -79,12 +83,12 @@ struct PresetProfile: Equatable {
         case .highQuality:
             PresetProfile(
                 codec: .hevc, referenceBitrate: 8_000_000, maxLongEdge: nil,
-                frameRate: .keep, audio: .aac(bitrate: 192_000), adaptsToMotion: true
+                frameRate: .limit(maxFrameRate), audio: .aac(bitrate: 192_000), adaptsToMotion: true
             )
         case .balanced:
             PresetProfile(
                 codec: .hevc, referenceBitrate: 4_000_000, maxLongEdge: nil,
-                frameRate: .keep, audio: .aac(bitrate: 128_000), adaptsToMotion: true
+                frameRate: .limit(maxFrameRate), audio: .aac(bitrate: 128_000), adaptsToMotion: true
             )
         case .smallest:
             PresetProfile(
@@ -99,7 +103,7 @@ struct PresetProfile: Equatable {
         case .targetSize:
             PresetProfile(
                 codec: .hevc, referenceBitrate: 4_000_000, maxLongEdge: nil,
-                frameRate: .keep, audio: .aac(bitrate: 96_000), adaptsToMotion: false
+                frameRate: .limit(maxFrameRate), audio: .aac(bitrate: 96_000), adaptsToMotion: false
             )
         case .original:
             nil

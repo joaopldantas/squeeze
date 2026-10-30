@@ -54,7 +54,11 @@ public struct EncodingPlanner: Sendable {
             bitrate = Self.capped(adaptive, source: source.video, size: size, frameRate: outputFrameRate)
         }
 
-        let (dynamicRange, warnings) = Self.dynamicRange(for: codec, source: source.video)
+        var (dynamicRange, warnings) = Self.dynamicRange(for: codec, source: source.video)
+        if let frameRateLimit, source.video.frameRate > Double(PresetProfile.maxFrameRate) + 0.5 {
+            let sourceFrameRate = Int(source.video.frameRate.rounded())
+            warnings.append(.highFrameRateReduced(source: sourceFrameRate, output: frameRateLimit))
+        }
         let isTargetSize = if case .targetSize = preset { overrides.videoBitrate == nil } else { false }
         let video = VideoEncodingSettings(
             codec: codec, size: size, frameRateLimit: frameRateLimit, bitrate: bitrate,
@@ -85,11 +89,18 @@ public struct EncodingPlanner: Sendable {
         return source.frameRate > Double(limit) + 0.5 ? limit : nil
     }
 
+    /// The ceiling scales with the same exponents as `BitrateCalculator.adaptiveBitrate`; scaling it linearly
+    /// would cut 240 → 60 fps footage to a quarter of the bits, which visibly smears detail.
     static func capped(_ bitrate: Int, source: VideoTrackInfo, size: PixelSize, frameRate: Double) -> Int {
         guard source.bitrate > 0, source.naturalSize.pixelCount > 0 else { return bitrate }
-        let pixelRatio = Double(size.pixelCount) / Double(source.naturalSize.pixelCount)
-        let frameRateRatio = source.frameRate > 0 ? min(1, frameRate / source.frameRate) : 1
-        let ceiling = Double(source.bitrate) * sourceBitrateCeiling * min(1, pixelRatio) * frameRateRatio
+        let pixelRatio = min(1, Double(size.pixelCount) / Double(source.naturalSize.pixelCount))
+        let modeledFrameRate = { (fps: Double) in min(fps, BitrateCalculator.maxModeledFrameRate) }
+        let frameRateRatio = source.frameRate > 0 && frameRate > 0
+            ? min(1, modeledFrameRate(frameRate) / modeledFrameRate(source.frameRate))
+            : 1
+        let ceiling = Double(source.bitrate) * sourceBitrateCeiling
+            * pow(pixelRatio, BitrateCalculator.pixelExponent)
+            * pow(frameRateRatio, BitrateCalculator.frameRateExponent)
         return max(BitrateCalculator.minimumVideoBitrate, min(bitrate, Int(ceiling)))
     }
 
@@ -103,10 +114,13 @@ public struct EncodingPlanner: Sendable {
         let longEdges = [source.naturalSize.longEdge] + targetSizeLongEdges.filter { $0 < source.naturalSize.longEdge }
         let candidates = longEdges.map { ResolutionScaler.fit(source.naturalSize, maxLongEdge: $0) }
         let fitting = candidates.first { candidate in
-            let needed = BitrateCalculator.adaptiveBitrate(
+            let typical = BitrateCalculator.adaptiveBitrate(
                 referenceBitrate: profile.referenceBitrate, size: candidate,
                 frameRate: frameRate, codec: codec, motion: .normal
             )
+            // The source's own bitrate tells how complex the content is: an easy motion graphic that
+            // Apple encoded at 6 Mbps in 4K doesn't need a "typical" 4K budget to look right.
+            let needed = capped(typical, source: source, size: candidate, frameRate: frameRate)
             return Double(bitrate) >= Double(needed) * targetSizeQualityFloor
         }
         return fitting ?? candidates.last ?? source.naturalSize

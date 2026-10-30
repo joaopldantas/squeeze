@@ -51,6 +51,12 @@ struct BitrateCalculatorTests {
         #expect(abs(Double(bitrate) / 4_000_000 - 4) < 0.01)
     }
 
+    @Test("acima de 60 fps (câmera lenta) o bitrate para de crescer", arguments: [120.0, 240])
+    func highFrameRateIsCapped(fps: Double) {
+        let size = PixelSize(width: 1920, height: 1080)
+        #expect(adaptive(size, fps: fps) == adaptive(size, fps: 60))
+    }
+
     @Test("H.264 precisa de mais bits que HEVC")
     func h264NeedsMoreBits() {
         let size = PixelSize(width: 1280, height: 720)

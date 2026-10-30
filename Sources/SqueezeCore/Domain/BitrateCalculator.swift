@@ -8,6 +8,11 @@ public enum BitrateCalculator {
 
     static let referencePixels = Double(1920 * 1080)
     static let referenceFrameRate = 30.0
+    /// High-frame-rate footage (slow motion at 120/240 fps) is extremely redundant between frames;
+    /// past 60 fps extra frames barely cost bits, so the model stops scaling there.
+    static let maxModeledFrameRate = 60.0
+    static let pixelExponent = 0.75
+    static let frameRateExponent = 0.5
 
     /// Video bitrate that makes the whole file (video + audio + container) fit `targetBytes`.
     public static func videoBitrate(targetBytes: Int64, duration: Double, audioBitrate: Int) throws -> Int {
@@ -39,9 +44,9 @@ public enum BitrateCalculator {
         codec: VideoCodec,
         motion: MotionLevel
     ) -> Int {
-        let pixelScale = pow(Double(size.pixelCount) / referencePixels, 0.75)
-        let fps = frameRate > 0 ? frameRate : referenceFrameRate
-        let frameRateScale = pow(fps / referenceFrameRate, 0.5)
+        let pixelScale = pow(Double(size.pixelCount) / referencePixels, pixelExponent)
+        let fps = frameRate > 0 ? min(frameRate, maxModeledFrameRate) : referenceFrameRate
+        let frameRateScale = pow(fps / referenceFrameRate, frameRateExponent)
         let bitrate = Double(referenceBitrate) * pixelScale * frameRateScale
             * codec.bitrateFactor * motion.bitrateFactor
         return max(minimumVideoBitrate, Int(bitrate))

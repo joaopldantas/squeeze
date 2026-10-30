@@ -27,6 +27,10 @@ public enum ConversionWarning: Hashable, Sendable, Codable {
     case dolbyVisionMetadataDropped(keptAs: DynamicRange)
     /// The source audio codec isn't allowed in MP4, so it is converted to AAC even in passthrough mode.
     case audioReencodedForMP4
+    /// High-frame-rate footage (slow motion) is reduced to keep the file small.
+    case highFrameRateReduced(source: Int, output: Int)
+    /// The last frames couldn't be decoded; the output ends where the readable video ends.
+    case damagedEndSkipped(seconds: Double)
 }
 
 /// Fully resolved instructions for one conversion.

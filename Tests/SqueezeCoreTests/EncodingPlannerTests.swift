@@ -130,8 +130,8 @@ struct EncodingPlannerTests {
     @Test("teto do bitrate de origem acompanha a redução de resolução")
     func capScalesWithResolution() throws {
         let settings = try video(.web(.p720), .sample(videoBitrate: 3_000_000))
-        // 3 Mbps × 0.8 × (1280×720)/(1920×1080)
-        #expect(settings.bitrate == 1_066_666)
+        // 3 Mbps × 0.8 × ((1280×720)/(1920×1080))^0.75
+        #expect(settings.bitrate == 1_306_394)
     }
 
     @Test("tamanho alvo pequeno reduz a resolução em vez de borrar")
@@ -143,10 +143,54 @@ struct EncodingPlannerTests {
         #expect(generous.size == source.video.naturalSize)
     }
 
+    @Test("tamanho alvo usa o bitrate de origem como pista de complexidade")
+    func targetSizeUsesSourceComplexity() throws {
+        // Medido no wallpaper "Sonoma": gráfico 4K a 240 fps em só 6,4 Mbps.
+        let easy = MediaInfo.sample(width: 3840, height: 2160, frameRate: 240, videoBitrate: 6_365_355, duration: 90)
+        let hard = MediaInfo.sample(width: 3840, height: 2160, frameRate: 240, videoBitrate: 80_000_000, duration: 90)
+        let easySize = try video(.targetSize(megabytes: 10), easy).size
+        let hardSize = try video(.targetSize(megabytes: 10), hard).size
+        #expect(easySize.longEdge > hardSize.longEdge)
+        #expect(easySize.longEdge >= 1280)
+    }
+
     @Test("30 fps ou 29,97 com limite 30 não descarta quadros", arguments: [30, 29.97, 24])
     func frameRateLimitOnlyWhenNeeded(fps: Double) throws {
         let settings = try video(.smallest, .sample(frameRate: fps))
         #expect(settings.frameRateLimit == nil)
+    }
+
+    @Test(
+        "câmera lenta (240 fps) cai para 60 fps com aviso",
+        arguments: [Preset.balanced, .highQuality, .targetSize(megabytes: 50)]
+    )
+    func highFrameRateIsReduced(preset: Preset) throws {
+        let plan = try planner.plan(for: preset, source: .sample(frameRate: 240))
+        #expect(plan.videoSettings?.frameRateLimit == 60)
+        #expect(plan.warnings == [.highFrameRateReduced(source: 240, output: 60)])
+    }
+
+    @Test("FPS \"manter\" preserva os 240 fps sem aviso")
+    func keepFrameRateOverride() throws {
+        let plan = try planner.plan(for: .balanced, source: .sample(frameRate: 240), overrides: .init(frameRate: .keep))
+        #expect(plan.videoSettings?.frameRateLimit == nil)
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("60 fps comuns não são tocados pelos presets de qualidade")
+    func sixtyFramesPerSecondUntouched() throws {
+        let plan = try planner.plan(for: .balanced, source: .sample(frameRate: 59.94))
+        #expect(plan.videoSettings?.frameRateLimit == nil)
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("240 → 60 fps não corta o teto do bitrate pela metade quatro vezes")
+    func capDoesNotScaleLinearlyWithFrameRate() throws {
+        // Medido no wallpaper "Golden Gate": HEVC 4K a 240 fps e 9,8 Mbps.
+        let source = MediaInfo.sample(width: 4096, height: 2160, frameRate: 240, videoBitrate: 9_822_519)
+        let settings = try video(.balanced, source)
+        #expect(settings.frameRateLimit == 60)
+        #expect(settings.bitrate == Int(9_822_519 * 0.8))
     }
 
     @Test("vídeo sem áudio não ganha faixa de áudio")
