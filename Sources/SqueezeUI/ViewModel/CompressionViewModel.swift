@@ -60,6 +60,7 @@ public final class CompressionViewModel {
     private let compressor: any VideoCompressing
     private let thumbnails: any ThumbnailProviding
     private let store: (any SettingsStoring)?
+    private let trash: any FileTrashing
     private var analysisLoop: Task<Void, Never>?
     private var conversionLoop: Task<Void, Never>?
     private var batch = BatchReport()
@@ -67,11 +68,13 @@ public final class CompressionViewModel {
     public init(
         compressor: any VideoCompressing = VideoCompressor(),
         thumbnails: any ThumbnailProviding = VideoThumbnailProvider(),
-        store: (any SettingsStoring)? = UserDefaultsSettingsStore()
+        store: (any SettingsStoring)? = UserDefaultsSettingsStore(),
+        trash: any FileTrashing = FinderTrash()
     ) {
         self.compressor = compressor
         self.thumbnails = thumbnails
         self.store = store
+        self.trash = trash
         self.settings = store?.load() ?? CompressionSettings()
     }
 
@@ -279,6 +282,20 @@ public final class CompressionViewModel {
         await task.value
         item.conversion = nil
         batch.record(item.phase)
+        if let result = item.result, settings.movesOriginalsToTrash {
+            trashOriginal(of: item, result: result)
+        }
+    }
+
+    /// Only a copy that actually saved space replaces the original; a grown file keeps both around.
+    private func trashOriginal(of item: QueueItem, result: ConversionResult) {
+        guard result.comparison.outputBytes < result.comparison.originalBytes else { return }
+        do {
+            try trash.trash(item.url)
+            item.originalTrashed = true
+        } catch {
+            notice = "Não foi possível mover “\(item.name)” para o Lixo."
+        }
     }
 
     // MARK: Analysis and planning

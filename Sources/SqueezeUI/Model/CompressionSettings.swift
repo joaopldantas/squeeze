@@ -31,6 +31,10 @@ public struct CompressionSettings: Hashable, Sendable, Codable {
         didSet { maxConcurrentJobs = Self.clampedJobs(maxConcurrentJobs) }
     }
 
+    /// Moves each original to the Trash once its smaller copy is written. Off by default: it's the one
+    /// setting that touches the user's files.
+    public var movesOriginalsToTrash = false
+
     public static let concurrencyRange = 1...2
 
     static func clampedJobs(_ jobs: Int) -> Int {
@@ -78,7 +82,7 @@ public struct CompressionSettings: Hashable, Sendable, Codable {
 extension CompressionSettings {
     private enum CodingKeys: String, CodingKey {
         case presetKind, targetMegabytes, codec, maxLongEdge, frameRate, videoBitrateKbps, audio, outputFolder
-        case maxConcurrentJobs
+        case maxConcurrentJobs, movesOriginalsToTrash
     }
 
     /// Every key is optional, so settings saved by an older version (missing newer keys) still load
@@ -98,6 +102,8 @@ extension CompressionSettings {
         let jobs = try container.decodeIfPresent(Int.self, forKey: .maxConcurrentJobs)
         // `didSet` doesn't run during init, so clamp here too.
         maxConcurrentJobs = Self.clampedJobs(jobs ?? defaults.maxConcurrentJobs)
+        movesOriginalsToTrash = try container.decodeIfPresent(Bool.self, forKey: .movesOriginalsToTrash)
+            ?? defaults.movesOriginalsToTrash
     }
 }
 
