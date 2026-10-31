@@ -34,10 +34,13 @@ It ships as a **native macOS app**, a **command-line tool** (`squeeze`) and a **
 ## Features
 
 - **A native Mac app:**
-  - **Menu bar icon:** drag a video towards the top of the screen and a small drop zone slides out under the icon; drop it there and it compresses right away with the current preset. The icon turns into a progress ring while it works; click it for a drop zone, the latest files and a quick preset picker. Squeeze can also hide its Dock icon and live only in the menu bar.
+  - **Menu bar icon:** drag a video towards the top of the screen and a small drop zone slides out under the icon; drop it there and it compresses right away with the current preset. The icon turns into a progress ring while it works; click it for a drop zone, the latest files and a quick preset picker.
+  - **Hands-free screen recordings:** turn it on and every new screen recording is compressed as soon as macOS saves it, in whatever folder the Screenshot app uses. Recordings are recognised by the tag macOS writes on the file, so other videos in that folder are left alone.
+  - **Menu bar-only mode:** hide the Dock icon and Squeeze starts with no window, living only in the menu bar. It can also open at login.
   - **Other ways in:** drop videos (or folders) on the window or the Dock icon, use Finder's *Open With*, or right-click in Finder and pick *Services → Comprimir com Squeeze*.
   - **Before you convert:** every file shows a thumbnail, its resolution, duration and codec, and the estimated size and saving. The estimates update live as you change settings.
   - **Batch:** files convert one or two at a time. Each file can be cancelled on its own, and a notification sums up the batch when it ends.
+  - **Optional cleanup:** move each original to the Trash once its smaller copy is written. It's off by default, never runs when the output came out bigger, and the Trash means nothing is lost for good.
 - **HEVC or H.264 in MP4:** HEVC (H.265) is the default and makes the smallest files. H.264 is there for maximum compatibility (WhatsApp, older browsers, Windows).
 - **Content-aware bitrate:** the bitrate scales with resolution and frame rate. Sampled frames are compared to detect screen recordings, which get a lower bitrate. The bitrate never goes above 80% of the source's, so a re-encode doesn't come out bigger than the original.
 - **Target size:** ask for "25 MB" and Squeeze works out the bitrate from the duration, after setting aside the audio and the container overhead. If the budget is too small for the resolution, it scales the video down instead of letting it turn into blocks.
@@ -82,6 +85,8 @@ open App/Squeeze.xcodeproj   # then ⌘R
 1. Drop videos on the window, or add them with ⌘O. To skip the window entirely, drag them towards the menu bar icon and drop them on the zone that opens.
 2. Pick a preset in the sidebar and watch the estimates change.
 3. Press **Converter** (⌘↩). Results land next to the originals, or in a folder you choose.
+
+The gear in the menu bar panel holds the automation switches: compress new screen recordings automatically, move originals to the Trash, show the Dock icon, and open at login.
 
 The Finder service (*Services → Comprimir com Squeeze*) appears once the app has run from `/Applications`; during development, run `/System/Library/CoreServices/pbs -update` to register it. The app's interface is in Portuguese.
 
@@ -330,6 +335,7 @@ scripts/
 - [x] "Show in Finder" and a notification when a batch finishes
 - [x] Finder action: *Comprimir com Squeeze* (a macOS service)
 - [x] Menu bar icon with a drop zone that opens while dragging, and live progress
+- [x] Automatic compression of new screen recordings, menu bar-only mode, open at login
 - [ ] Signed and notarized release download
 - [ ] Benchmarks for iPhone videos and macOS screen recordings
 - [ ] English localisation of the app and CLI
