@@ -115,3 +115,19 @@ func eventually(
     }
     return true
 }
+
+final class FakeTrash: FileTrashing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _trashed: [URL] = []
+    private var _fails = false
+
+    var trashed: [URL] { lock.withLock { _trashed } }
+    func failEverything() { lock.withLock { _fails = true } }
+
+    func trash(_ url: URL) throws {
+        try lock.withLock {
+            if _fails { throw CocoaError(.fileWriteNoPermission) }
+            _trashed.append(url)
+        }
+    }
+}

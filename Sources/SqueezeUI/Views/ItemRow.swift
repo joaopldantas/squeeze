@@ -57,6 +57,11 @@ struct ItemRow: View {
                 Text(sizes(result.comparison)).font(.callout)
                 Tag(format.change(result.comparison), color: result.comparison.outputIsLarger ? .orange : .green)
                 Text("em \(format.elapsed(result.elapsed))").font(.caption).foregroundStyle(.secondary)
+                if item.originalTrashed {
+                    Label("Original no Lixo", systemImage: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         case .failed(let error):
             Label(error.localizedDescription, systemImage: "xmark.octagon.fill")
@@ -126,7 +131,9 @@ struct ItemRow: View {
         if let result = item.result {
             Button("Mostrar no Finder") { NSWorkspace.shared.activateFileViewerSelecting([result.outputURL]) }
         }
-        Button("Mostrar original no Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+        if !item.originalTrashed {
+            Button("Mostrar original no Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+        }
         if item.canConvert {
             Button("Converter") { viewModel.convert(item) }
         }

@@ -47,6 +47,8 @@ struct SettingsPanel: View {
 
             Section("Saída") {
                 OutputOptions(settings: $settings)
+                Toggle("Mover originais para o Lixo", isOn: $settings.movesOriginalsToTrash)
+                    .help("Só quando o arquivo comprimido fica menor. Dá para recuperar no Lixo.")
             }
 
             Section("Lote") {

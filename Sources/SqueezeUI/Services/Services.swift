@@ -68,3 +68,16 @@ public struct UserDefaultsSettingsStore: SettingsStoring {
         UserDefaults.standard.set(data, forKey: key)
     }
 }
+
+/// Moves files to the Trash (never deletes them), so a replaced original can always be put back.
+public protocol FileTrashing: Sendable {
+    func trash(_ url: URL) throws
+}
+
+public struct FinderTrash: FileTrashing {
+    public init() {}
+
+    public func trash(_ url: URL) throws {
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+    }
+}

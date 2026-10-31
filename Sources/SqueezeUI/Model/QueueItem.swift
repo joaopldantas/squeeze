@@ -30,6 +30,8 @@ public final class QueueItem: Identifiable {
     public internal(set) var planError: SqueezeError?
     /// Set when the user accepted "try a more aggressive preset" for this file only.
     public internal(set) var presetOverride: Preset?
+    /// The original went to the Trash after a successful, smaller conversion.
+    public internal(set) var originalTrashed = false
 
     /// Source facts gathered once; every settings change re-plans from here without reading the file.
     var analysis: ConversionPreview?
