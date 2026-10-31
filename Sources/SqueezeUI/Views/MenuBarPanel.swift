@@ -2,16 +2,30 @@ import AppKit
 import SqueezeCore
 import SwiftUI
 
+/// App-level switches shown in the panel. They live in the app target, which owns the system integrations
+/// (Dock, login items, the recordings folder).
+public struct MenuBarOptions {
+    public var showsInDock: Binding<Bool>
+    public var opensAtLogin: Binding<Bool>
+    public var compressesScreenRecordings: Binding<Bool>
+
+    public init(showsInDock: Binding<Bool>, opensAtLogin: Binding<Bool>, compressesScreenRecordings: Binding<Bool>) {
+        self.showsInDock = showsInDock
+        self.opensAtLogin = opensAtLogin
+        self.compressesScreenRecordings = compressesScreenRecordings
+    }
+}
+
 /// The popover under the menu bar icon: status, quick preset choice and the latest files.
 public struct MenuBarPanel: View {
     @Bindable var viewModel: CompressionViewModel
-    @Binding var showsInDock: Bool
+    let options: MenuBarOptions
     let openWindow: () -> Void
     private let format = Formatting()
 
-    public init(viewModel: CompressionViewModel, showsInDock: Binding<Bool>, openWindow: @escaping () -> Void) {
+    public init(viewModel: CompressionViewModel, options: MenuBarOptions, openWindow: @escaping () -> Void) {
         self.viewModel = viewModel
-        self._showsInDock = showsInDock
+        self.options = options
         self.openWindow = openWindow
     }
 
@@ -29,6 +43,12 @@ public struct MenuBarPanel: View {
                 viewModel.addAndConvert(urls)
             }
             .frame(height: 96)
+
+            if options.compressesScreenRecordings.wrappedValue {
+                Label("Gravações de tela novas são comprimidas sozinhas", systemImage: "record.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             let recent = viewModel.recentItems()
             if !recent.isEmpty {
@@ -74,14 +94,28 @@ public struct MenuBarPanel: View {
         HStack {
             Button("Abrir janela", action: openWindow)
             Spacer()
-            Toggle("Ícone no Dock", isOn: $showsInDock)
-                .toggleStyle(.checkbox)
-                .font(.caption)
+            optionsMenu
             Button("Sair", systemImage: "power") { NSApp.terminate(nil) }
                 .labelStyle(.iconOnly)
                 .help("Sair do Squeeze")
         }
         .controlSize(.small)
+    }
+
+    private var optionsMenu: some View {
+        Menu {
+            Toggle("Comprimir gravações de tela automaticamente", isOn: options.compressesScreenRecordings)
+            Toggle("Mover originais para o Lixo", isOn: $viewModel.settings.movesOriginalsToTrash)
+            Divider()
+            Toggle("Mostrar ícone no Dock", isOn: options.showsInDock)
+            Toggle("Abrir ao iniciar sessão", isOn: options.opensAtLogin)
+        } label: {
+            Label("Opções", systemImage: "gearshape")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Opções")
     }
 }
 

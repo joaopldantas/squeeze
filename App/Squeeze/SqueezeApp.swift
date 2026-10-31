@@ -11,7 +11,10 @@ struct SqueezeApp: App {
         // A single window: files opened from Finder join its list instead of spawning new windows.
         Window("Squeeze", id: "main") {
             RootView(viewModel: appDelegate.viewModel)
-                .background(OpenWindowBridge { appDelegate.openMainWindow = $0 })
+                .background(OpenWindowBridge(
+                    register: { appDelegate.openMainWindow = $0 },
+                    closesNow: { appDelegate.takeLaunchesHidden() }
+                ))
         }
         .defaultSize(width: 1000, height: 640)
         .commands {
@@ -21,13 +24,21 @@ struct SqueezeApp: App {
 }
 
 /// Hands SwiftUI's `openWindow` action to AppKit code (the menu bar panel, Dock reopen).
+///
+/// The action only exists once the window has appeared, so in menu bar-only mode the window still opens
+/// at launch, hands the action over and closes right away.
 private struct OpenWindowBridge: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     let register: (@escaping @MainActor () -> Void) -> Void
+    let closesNow: () -> Bool
 
     var body: some View {
         Color.clear.onAppear {
             register { openWindow(id: "main") }
+            if closesNow() {
+                dismissWindow(id: "main")
+            }
         }
     }
 }
@@ -37,8 +48,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let viewModel = CompressionViewModel()
     let preferences = AppPreferences()
     var openMainWindow: @MainActor () -> Void = {}
+    /// In menu bar-only mode Squeeze starts with no window, unless it was launched to open files.
+    private lazy var launchesHidden = !preferences.showsInDock
     private var statusItem: StatusItemController?
     private var dropShelf: DropShelfController?
+    private var recordingsWatcher: FolderWatcher?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         preferences.applyActivationPolicy()
@@ -51,11 +65,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewModel.onBatchFinished = { [weak self] report in self?.notify(report) }
         // "Comprimir com Squeeze" in Finder's Services menu (see NSServices in project.yml).
         NSApp.servicesProvider = self
+        preferences.onScreenRecordingsChange = { [weak self] in self?.updateRecordingsWatcher() }
+        updateRecordingsWatcher()
+    }
+
+    /// Converts each screen recording right after macOS saves it, in the folder set in the Screenshot app.
+    private func updateRecordingsWatcher() {
+        guard preferences.compressesScreenRecordings else {
+            recordingsWatcher = nil
+            return
+        }
+        let folder = ScreenRecordings.folder
+        recordingsWatcher = FolderWatcher(folder: folder, accept: ScreenRecordings.isRecording) { [weak self] urls in
+            self?.viewModel.addAndConvert(urls)
+        }
+        if recordingsWatcher == nil {
+            preferences.compressesScreenRecordings = false
+            showFolderAccessAlert(for: folder)
+        }
+    }
+
+    private func showFolderAccessAlert(for folder: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Não foi possível acompanhar “\(folder.lastPathComponent)”"
+        alert.informativeText = "Permita o acesso do Squeeze a essa pasta em Ajustes do Sistema › Privacidade "
+            + "e Segurança › Arquivos e Pastas, e ligue a opção de novo."
+        NSApp.activate()
+        alert.runModal()
     }
 
     /// Finder "Open With", files dropped on the Dock icon and `open -a Squeeze file.mov` all land here.
     func application(_ application: NSApplication, open urls: [URL]) {
         viewModel.add(urls)
+        // Opened files wait in the window for the user to convert them, so it has to be visible.
+        launchesHidden = false
+        if !preferences.showsInDock {
+            showMainWindow()
+        }
+    }
+
+    /// Whether the window that just appeared should close: true once, at a menu bar-only launch.
+    func takeLaunchesHidden() -> Bool {
+        defer { launchesHidden = false }
+        return launchesHidden
     }
 
     /// The menu bar icon keeps working with the window closed.

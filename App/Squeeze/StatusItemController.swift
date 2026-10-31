@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import ServiceManagement
 import SqueezeUI
 import SwiftUI
 
@@ -12,15 +13,24 @@ final class StatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private let viewModel: CompressionViewModel
+    private let preferences: AppPreferences
 
     init(viewModel: CompressionViewModel, preferences: AppPreferences, openWindow: @escaping () -> Void) {
         self.viewModel = viewModel
+        self.preferences = preferences
         super.init()
 
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(rootView: MenuBarPanel(
             viewModel: viewModel,
-            showsInDock: Binding(get: { preferences.showsInDock }, set: { preferences.showsInDock = $0 }),
+            options: MenuBarOptions(
+                showsInDock: Binding(get: { preferences.showsInDock }, set: { preferences.showsInDock = $0 }),
+                opensAtLogin: Binding(get: { preferences.opensAtLogin }, set: { preferences.setOpensAtLogin($0) }),
+                compressesScreenRecordings: Binding(
+                    get: { preferences.compressesScreenRecordings },
+                    set: { preferences.compressesScreenRecordings = $0 }
+                )
+            ),
             openWindow: { [weak self] in
                 self?.popover.performClose(nil)
                 openWindow()
@@ -48,6 +58,7 @@ final class StatusItemController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            preferences.refreshLoginItem()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
@@ -125,6 +136,7 @@ enum StatusIcon {
 @Observable
 final class AppPreferences {
     private static let showsInDockKey = "showsInDock"
+    private static let compressesScreenRecordingsKey = "compressesScreenRecordings"
 
     /// Hiding the Dock icon turns Squeeze into a menu bar utility; the window stays one click away.
     var showsInDock: Bool {
@@ -134,8 +146,23 @@ final class AppPreferences {
         }
     }
 
+    /// Compress every new screen recording as soon as macOS saves it. The app delegate runs the watcher.
+    var compressesScreenRecordings: Bool {
+        didSet {
+            UserDefaults.standard.set(compressesScreenRecordings, forKey: Self.compressesScreenRecordingsKey)
+            onScreenRecordingsChange?()
+        }
+    }
+    var onScreenRecordingsChange: (@MainActor () -> Void)?
+
+    /// Mirrors the system's login item list, which the user can also edit in System Settings.
+    private(set) var opensAtLogin = false
+
     init() {
-        showsInDock = UserDefaults.standard.object(forKey: Self.showsInDockKey) as? Bool ?? true
+        let defaults = UserDefaults.standard
+        showsInDock = defaults.object(forKey: Self.showsInDockKey) as? Bool ?? true
+        compressesScreenRecordings = defaults.bool(forKey: Self.compressesScreenRecordingsKey)
+        refreshLoginItem()
     }
 
     func applyActivationPolicy() {
@@ -143,5 +170,27 @@ final class AppPreferences {
         if showsInDock {
             NSApp.activate()
         }
+    }
+
+    func setOpensAtLogin(_ enabled: Bool) {
+        let service = SMAppService.mainApp
+        do {
+            if enabled {
+                try service.register()
+            } else {
+                try service.unregister()
+            }
+        } catch {
+            NSSound.beep()
+        }
+        // The system may ask the user to allow it first; send them straight to the right page.
+        if service.status == .requiresApproval {
+            SMAppService.openSystemSettingsLoginItems()
+        }
+        refreshLoginItem()
+    }
+
+    func refreshLoginItem() {
+        opensAtLogin = SMAppService.mainApp.status == .enabled
     }
 }
